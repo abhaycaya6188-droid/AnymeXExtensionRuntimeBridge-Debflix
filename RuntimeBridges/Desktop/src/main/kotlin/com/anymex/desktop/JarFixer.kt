@@ -24,11 +24,11 @@ import java.util.jar.JarOutputStream
 
 object JarFixer {
 
-    private const val FIX_MARKER = "META-INF/anymex-jarfixed"
+    private const val FIX_MARKER = "META-INF/anymex-jarfixed-v2"
 
     fun isFixed(jar: File): Boolean = try {
         JarFile(jar).use { jf -> 
-            jf.getJarEntry(FIX_MARKER) != null || jf.getJarEntry("META-INF/miwayomi-jarfixed") != null 
+            jf.getJarEntry(FIX_MARKER) != null
         }
     } catch (e: Exception) {
         false
@@ -174,26 +174,64 @@ object JarFixer {
             val insns = m.instructions
             val pending = java.util.ArrayDeque<TypeInsnNode>()
             var pendingDup: TypeInsnNode? = null
+            var lastNew: TypeInsnNode? = null
+            val localNew = HashMap<Int, String>()
+            var lastLoadedLocalType: String? = null
             var i = 0
             while (i < insns.size()) {
                 val n = insns[i]
                 when {
-                    n is TypeInsnNode && n.opcode == Opcodes.NEW -> pendingDup = n
+                    n is LabelNode || n is LineNumberNode || n is FrameNode -> {}
+                    n is TypeInsnNode && n.opcode == Opcodes.NEW -> {
+                        pendingDup = n
+                        lastNew = n
+                        lastLoadedLocalType = null
+                    }
                     n is InsnNode && n.opcode == Opcodes.DUP && pendingDup != null -> {
                         pending.push(pendingDup)
                         pendingDup = null
+                        lastLoadedLocalType = null
+                    }
+                    n is VarInsnNode && n.opcode == Opcodes.ASTORE -> {
+                        pendingDup = null
+                        if (lastNew != null) {
+                            localNew[n.`var`] = lastNew.desc
+                            lastNew = null
+                        }
+                        lastLoadedLocalType = null
+                    }
+                    n is VarInsnNode && n.opcode == Opcodes.ALOAD -> {
+                        pendingDup = null
+                        lastNew = null
+                        lastLoadedLocalType = localNew[n.`var`]
                     }
                     n is MethodInsnNode && n.opcode == Opcodes.INVOKESPECIAL && n.name == "<init>" -> {
+                        pendingDup = null
+                        lastNew = null
                         if (!pending.isEmpty()) {
                             val newInsn = pending.pop()
                             val t = newInsn.desc
-                            if (n.owner != t) {
+                            if (n.owner != t && classes.containsKey(t + ".class")) {
                                 n.owner = t
                                 needInit.add(t to n.desc)
                             }
+                        } else if (lastLoadedLocalType != null && n.owner != lastLoadedLocalType) {
+                            if (n.owner == "javax/crypto/spec/SecretKeySpec" || classes.containsKey(lastLoadedLocalType + ".class")) {
+                                n.owner = lastLoadedLocalType
+                                if (classes.containsKey(lastLoadedLocalType + ".class")) {
+                                    needInit.add(lastLoadedLocalType to n.desc)
+                                }
+                            }
+                        } else if (n.owner == "javax/crypto/spec/SecretKeySpec" && n.desc == "()V") {
+                            n.owner = "java/lang/StringBuilder"
                         }
+                        lastLoadedLocalType = null
                     }
-                    else -> {}
+                    else -> {
+                        pendingDup = null
+                        lastNew = null
+                        lastLoadedLocalType = null
+                    }
                 }
                 i++
             }

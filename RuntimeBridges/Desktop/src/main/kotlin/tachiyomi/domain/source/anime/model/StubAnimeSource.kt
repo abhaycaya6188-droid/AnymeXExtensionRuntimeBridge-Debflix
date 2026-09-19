@@ -12,6 +12,8 @@ class StubAnimeSource(
     override val name: String,
 ) : AnimeSource {
 
+    override val supportsLatest: Boolean = false
+
     private val isInvalid: Boolean = name.isBlank() || lang.isBlank()
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime =

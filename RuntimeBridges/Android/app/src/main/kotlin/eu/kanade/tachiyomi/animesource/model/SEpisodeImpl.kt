@@ -2,6 +2,9 @@
 
 package eu.kanade.tachiyomi.animesource.model
 
+import kotlinx.serialization.json.JsonObject
+import mihon.core.common.extensions.EMPTY
+
 class SEpisodeImpl : SEpisode {
 
     override var url: String = ""
@@ -19,4 +22,6 @@ class SEpisodeImpl : SEpisode {
     override var summary: String? = null
 
     override var preview_url: String? = null
+
+    override var memo: JsonObject = JsonObject.EMPTY
 }

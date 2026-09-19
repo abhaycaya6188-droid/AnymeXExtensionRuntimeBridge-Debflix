@@ -97,9 +97,8 @@ class NetworkHelper(
         builder.build()
     }
 
-    /**
-     * @deprecated Since extension-lib 1.5
-     */
+    val nonCloudflareClient: OkHttpClient = client
+
     @Deprecated("The regular client handles Cloudflare by default")
     @Suppress("UNUSED")
     val cloudflareClient: OkHttpClient = client

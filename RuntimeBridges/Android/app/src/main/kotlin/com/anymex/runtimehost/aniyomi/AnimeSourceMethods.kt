@@ -1,6 +1,7 @@
 package com.anymex.runtimehost.aniyomi
 
 import eu.kanade.tachiyomi.PreferenceScreen
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
@@ -104,12 +105,100 @@ class AnimeSourceMethods(sourceID: String, langIndex: Int = 0) : AniyomiSourceMe
         }
     }
 
-    override suspend fun getDetails(media: SAnime): SAnime = source.getAnimeDetails(media)
+    override suspend fun getDetails(media: SAnime): SAnime {
+        return try {
+            source.getAnimeDetails(media)
+        } catch (e: UnsupportedOperationException) {
+            source.getAnimeEpisodeUpdate(media, emptyList(), fetchDetails = true, fetchEpisodes = false).anime
+        }
+    }
 
-    override suspend fun getEpisodeList(media: SAnime): List<SEpisode> = source.getEpisodeList(media)
+    override suspend fun getEpisodeList(media: SAnime): List<SEpisode> {
+        return try {
+            source.getEpisodeList(media)
+        } catch (e: UnsupportedOperationException) {
+            source.getAnimeEpisodeUpdate(media, emptyList(), fetchDetails = false, fetchEpisodes = true).episodes
+        }
+    }
+
+    private fun checkHasHosters(src: AnimeSource): Boolean {
+        var current: Class<*>? = src::class.java
+        while (current != null) {
+            if (
+                current.name == "eu.kanade.tachiyomi.animesource.online.AnimeHttpSource" ||
+                current.name == "eu.kanade.tachiyomi.animesource.AnimeCatalogueSource" ||
+                current.name == "eu.kanade.tachiyomi.animesource.AnimeSource"
+            ) {
+                return false
+            }
+            if (current.declaredMethods.any {
+                    it.name in listOf("getHosterList", "hosterListRequest", "hosterListParse")
+                }
+            ) {
+                return true
+            }
+            current = current.superclass ?: return false
+        }
+        return false
+    }
 
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        return source.getVideoList(episode)
+        val hasHosters = checkHasHosters(source)
+
+        if (hasHosters) {
+            val hosters = try {
+                source.getHosterList(episode)
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            if (hosters.isNotEmpty()) {
+                return hosters.flatMap { hoster ->
+                    try {
+                        val hosterVideos = source.getVideoList(hoster)
+                        hosterVideos.map { v ->
+                            val combinedTitle = if (hoster.hosterName.isNotBlank() && !v.videoTitle.contains(hoster.hosterName, ignoreCase = true)) {
+                                "${hoster.hosterName} - ${v.videoTitle.ifBlank { "Default" }}"
+                            } else {
+                                v.videoTitle.ifBlank { hoster.hosterName.ifBlank { "Default" } }
+                            }
+                            v.copy(videoTitle = combinedTitle)
+                        }
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                }
+            }
+        }
+
+        return try {
+            source.getVideoList(episode)
+        } catch (e: Exception) {
+            try {
+                val hosters = source.getHosterList(episode)
+                if (hosters.isNotEmpty()) {
+                    hosters.flatMap { hoster ->
+                        try {
+                            val hosterVideos = source.getVideoList(hoster)
+                            hosterVideos.map { v ->
+                                val combinedTitle = if (hoster.hosterName.isNotBlank() && !v.videoTitle.contains(hoster.hosterName, ignoreCase = true)) {
+                                    "${hoster.hosterName} - ${v.videoTitle.ifBlank { "Default" }}"
+                                } else {
+                                    v.videoTitle.ifBlank { hoster.hosterName.ifBlank { "Default" } }
+                                }
+                                v.copy(videoTitle = combinedTitle)
+                            }
+                        } catch (err: Exception) {
+                            emptyList()
+                        }
+                    }
+                } else {
+                    throw e
+                }
+            } catch (_: Exception) {
+                throw e
+            }
+        }
     }
 
     override suspend fun getChapterList(media: SAnime): List<SEpisode> =

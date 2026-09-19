@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animesource.model
 
 import fi.iki.elonen.NanoHTTPD
+import android.util.Log
 
 open class HttpServer : NanoHTTPD(0) {
     val url: String
@@ -18,12 +19,16 @@ open class HttpServer : NanoHTTPD(0) {
             super.start()
             isRunning = true
         } catch (e: Exception) {
-            System.err.println("Failed to start http server: ${e.message}")
+            Log.d("HttpServer", "Failed to start http server", e)
         }
     }
 
     override fun stop() {
         super.stop()
         isRunning = false
+    }
+
+    companion object {
+        const val PLACEHOLDER_URL = "http://localhost:1"
     }
 }

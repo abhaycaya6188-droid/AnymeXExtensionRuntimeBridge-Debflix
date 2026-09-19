@@ -653,7 +653,16 @@ object RuntimeBridge {
             
             val pages = m.getPageList(chapter)
             val httpSource = m.getHttpSource() as? HttpSource
-            
+
+            val sourceName = httpSource?.name?.lowercase() ?: ""
+            val sourceClassName = httpSource?.javaClass?.name?.lowercase() ?: ""
+            val isBypassed = sourceName.contains("mangadex") ||
+                    sourceClassName.contains("mangadex") ||
+                    sourceId.equals("mangadex", ignoreCase = true)
+            val isWhitelisted = sourceName.contains("mangafire") ||
+                    sourceClassName.contains("mangafire") ||
+                    sourceId.equals("mangafire", ignoreCase = true)
+
             val overridesClient = try {
                 val networkHelper = uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>()
                 httpSource?.client !== networkHelper.client
@@ -672,8 +681,8 @@ object RuntimeBridge {
                 false
             }
 
-            val useProxy = hasCustomGetImage || overridesClient
-            Log.i("RuntimeBridge", "Source '${sourceId}': hasCustomGetImage=$hasCustomGetImage, overridesClient=$overridesClient -> useProxy=$useProxy")
+            val useProxy = !isBypassed && (isWhitelisted || hasCustomGetImage || overridesClient)
+            Log.i("RuntimeBridge", "Source '${sourceId}': isBypassed=$isBypassed, isWhitelisted=$isWhitelisted, hasCustomGetImage=$hasCustomGetImage, overridesClient=$overridesClient -> useProxy=$useProxy")
             val proxyPort = if (useProxy) MangaImageProxy.start() else 0
 
             pages.map { page ->
@@ -1223,7 +1232,8 @@ object RuntimeBridge {
     private fun videoToMap(it: Video): Map<String, Any?> = mapOf(
         "title" to it.videoTitle,
         "url" to it.videoUrl,
-        "quality" to it.resolution,
+        "quality" to (it.videoTitle.takeIf { t -> t.isNotBlank() } ?: it.resolution?.let { "${it}p" } ?: "Default"),
+        "resolution" to it.resolution,
         "bitrate" to it.bitrate,
         "headers" to it.headers?.toMap(),
         "preferred" to it.preferred,

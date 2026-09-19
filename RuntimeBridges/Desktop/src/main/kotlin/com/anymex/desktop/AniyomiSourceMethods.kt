@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.preference.*
 import com.google.gson.Gson
 import eu.kanade.tachiyomi.PreferenceScreen as EuPreferenceScreen
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -377,9 +378,32 @@ object AniyomiSourceMethods {
                     this.title = title
                     this.thumbnail_url = cover.takeIf { it.isNotBlank() }?.normalizeUrl()
                 }
-                val details = source.getAnimeDetails(animeObj)
-                val episodes = source.getEpisodeList(animeObj)
-                map.putAll(details.toDetailsMap())
+                var details: SAnime? = null
+                var episodes: List<SEpisode>? = null
+                try {
+                    details = source.getAnimeDetails(animeObj)
+                } catch (e: Throwable) {
+                    if (e is UnsupportedOperationException || e is IllegalStateException) {
+                        val update = source.getAnimeEpisodeUpdate(animeObj, emptyList(), fetchDetails = true, fetchEpisodes = true)
+                        details = update.anime
+                        episodes = update.episodes
+                    } else {
+                        throw e
+                    }
+                }
+                if (episodes == null) {
+                    episodes = try {
+                        source.getEpisodeList(animeObj)
+                    } catch (e: Throwable) {
+                        if (e is UnsupportedOperationException || e is IllegalStateException) {
+                            val update = source.getAnimeEpisodeUpdate(animeObj, emptyList(), fetchDetails = false, fetchEpisodes = true)
+                            update.episodes
+                        } else {
+                            throw e
+                        }
+                    }
+                }
+                map.putAll(details!!.toDetailsMap())
                 map["episodes"] = episodes.map { it.toDetailsMap() }
             } else {
                 val source = DesktopExtensionLoader.loadedMangaSources[className]
@@ -436,6 +460,27 @@ object AniyomiSourceMethods {
         }
     }
 
+    private fun checkHasHosters(src: AnimeSource): Boolean {
+        var current: Class<*>? = src::class.java
+        while (current != null) {
+            if (
+                current.name == "eu.kanade.tachiyomi.animesource.online.AnimeHttpSource" ||
+                current.name == "eu.kanade.tachiyomi.animesource.AnimeCatalogueSource" ||
+                current.name == "eu.kanade.tachiyomi.animesource.AnimeSource"
+            ) {
+                return false
+            }
+            if (current.declaredMethods.any {
+                    it.name in listOf("getHosterList", "hosterListRequest", "hosterListParse")
+                }
+            ) {
+                return true
+            }
+            current = current.superclass ?: return false
+        }
+        return false
+    }
+
     suspend fun fetchVideoList(className: String, url: String, name: String): String {
         System.err.println("[INFO] fetchVideoList called for source '$className' (url '$url', name '$name')")
         return try {
@@ -448,12 +493,70 @@ object AniyomiSourceMethods {
                 this.url = url
                 this.name = name
             }
-            val videos = source.getVideoList(episode)
+            val hasHosters = checkHasHosters(source)
+
+            val videos = if (hasHosters) {
+                val hosters = try {
+                    source.getHosterList(episode)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
+                if (hosters.isNotEmpty()) {
+                    hosters.flatMap { hoster ->
+                        try {
+                            val hosterVideos = source.getVideoList(hoster)
+                            hosterVideos.map { v ->
+                                val combinedTitle = if (hoster.hosterName.isNotBlank() && !v.videoTitle.contains(hoster.hosterName, ignoreCase = true)) {
+                                    "${hoster.hosterName} - ${v.videoTitle.ifBlank { "Default" }}"
+                                } else {
+                                    v.videoTitle.ifBlank { hoster.hosterName.ifBlank { "Default" } }
+                                }
+                                v.copy(videoTitle = combinedTitle)
+                            }
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                    }
+                } else {
+                    source.getVideoList(episode)
+                }
+            } else {
+                try {
+                    source.getVideoList(episode)
+                } catch (e: Exception) {
+                    val hosters = source.getHosterList(episode)
+                    if (hosters.isNotEmpty()) {
+                        hosters.flatMap { hoster ->
+                            try {
+                                val hosterVideos = source.getVideoList(hoster)
+                                hosterVideos.map { v ->
+                                    val combinedTitle = if (hoster.hosterName.isNotBlank() && !v.videoTitle.contains(hoster.hosterName, ignoreCase = true)) {
+                                        "${hoster.hosterName} - ${v.videoTitle.ifBlank { "Default" }}"
+                                    } else {
+                                        v.videoTitle.ifBlank { hoster.hosterName.ifBlank { "Default" } }
+                                    }
+                                    v.copy(videoTitle = combinedTitle)
+                                }
+                            } catch (err: Exception) {
+                                emptyList()
+                            }
+                        }
+                    } else {
+                        throw e
+                    }
+                }
+            }
             gson.toJson(videos.map { video ->
                 mapOf(
                     "title" to (try { video.videoTitle } catch (e: Exception) { "" }),
                     "url" to (try { video.videoUrl } catch (e: Exception) { "" }),
-                    "quality" to (try { video.resolution } catch (e: Exception) { null }),
+                    "quality" to (try {
+                        video.videoTitle.takeIf { it.isNotBlank() }
+                            ?: video.resolution?.let { "${it}p" }
+                            ?: "Default"
+                    } catch (e: Exception) { "Default" }),
+                    "resolution" to (try { video.resolution } catch (e: Exception) { null }),
                     "bitrate" to (try { video.bitrate } catch (e: Exception) { null }),
                     "headers" to (try { video.headers?.names()?.associateWith { video.headers!![it] ?: "" } } catch (e: Exception) { emptyMap<String, String>() }),
                     "preferred" to (try { video.preferred } catch (e: Exception) { false }),
@@ -520,6 +623,14 @@ object AniyomiSourceMethods {
                 }
             }
             val httpSource = source as? HttpSource
+
+            val sourceName = httpSource?.name?.lowercase() ?: ""
+            val sourceClassName = className.lowercase()
+            val isBypassed = sourceName.contains("mangadex") ||
+                    sourceClassName.contains("mangadex")
+            val isWhitelisted = sourceName.contains("mangafire") ||
+                    sourceClassName.contains("mangafire")
+
             val overridesClient = try {
                 val networkHelper = uy.kohesive.injekt.Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>()
                 httpSource?.client !== networkHelper.client
@@ -538,8 +649,8 @@ object AniyomiSourceMethods {
                 false
             }
 
-            val useProxy = hasCustomGetImage || overridesClient
-            System.err.println("Source '${className}': hasCustomGetImage=$hasCustomGetImage, overridesClient=$overridesClient -> useProxy=$useProxy")
+            val useProxy = !isBypassed && (isWhitelisted || hasCustomGetImage || overridesClient)
+            System.err.println("Source '${className}': isBypassed=$isBypassed, isWhitelisted=$isWhitelisted, hasCustomGetImage=$hasCustomGetImage, overridesClient=$overridesClient -> useProxy=$useProxy")
             val proxyPort = if (useProxy) MangaImageProxy.start() else 0
 
             return gson.toJson(pages.map { page ->

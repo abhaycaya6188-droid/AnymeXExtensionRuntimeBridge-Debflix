@@ -191,7 +191,15 @@ object MangaImageProxy {
                 if (page.imageUrl.isNullOrEmpty()) {
                     page.imageUrl = src.getImageUrl(page)
                 }
-                val response = src.getImage(page)
+                val response = try {
+                    src.getImage(page)
+                } catch (e: Exception) {
+                    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                        src.client.newCall(eu.kanade.tachiyomi.network.GET(imageUrl, src.headers)).execute()
+                    } else {
+                        throw e
+                    }
+                }
                 if (response.isSuccessful) {
                     val bytes = response.body.bytes()
                     val contentType = response.body.contentType()?.toString() ?: "image/jpeg"

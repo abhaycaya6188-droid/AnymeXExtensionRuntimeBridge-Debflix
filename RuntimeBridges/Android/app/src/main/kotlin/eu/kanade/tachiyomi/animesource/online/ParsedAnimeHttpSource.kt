@@ -257,5 +257,5 @@ abstract class ParsedAnimeHttpSource : AnimeHttpSource() {
      *
      * @param document the parsed document.
      */
-    protected abstract fun videoUrlParse(document: Document): String
+    protected open fun videoUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
