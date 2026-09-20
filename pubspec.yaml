@@ -39,7 +39,6 @@ dependencies:
     install_plugin: ^2.1.0
     device_apps: ^2.2.0
     file_picker: ^8.1.7
-    jni: ^0.15.0
     archive: ^4.0.9
     libtorrent_flutter: 1.8.5
     ffi: ^2.1.2
@@ -50,7 +49,6 @@ dev_dependencies:
     flutter_lints: ^6.0.0
     isar_community_generator: 3.3.0-dev.3
     build_runner: ^2.4.11
-    jnigen: ^0.15.0
 
 flutter:
     plugin:

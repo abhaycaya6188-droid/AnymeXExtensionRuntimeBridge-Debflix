@@ -63,36 +63,6 @@ class RuntimePaths {
     return p.join(dir.path, 'dex-tools-v2.4', 'd2j-dex2jar.$ext');
   }
 
-  Future<String?> get jvmLibPath async {
-    if (Platform.isAndroid) return null;
-
-    final jreRoot = await jreDir;
-    if (!await jreRoot.exists()) return null;
-
-    String relativePath;
-    if (Platform.isWindows) {
-      relativePath = p.join('bin', 'server', 'jvm.dll');
-    } else if (Platform.isMacOS) {
-      final macBundlePath =
-          p.join('Contents', 'Home', 'lib', 'server', 'libjvm.dylib');
-      final macPath = p.join('lib', 'server', 'libjvm.dylib');
-
-      if (await File(p.join(jreRoot.path, macBundlePath)).exists()) {
-        return p.join(jreRoot.path, macBundlePath);
-      }
-      relativePath = macPath;
-    } else {
-      relativePath = p.join('lib', 'server', 'libjvm.so');
-    }
-
-    final fullPath = p.join(jreRoot.path, relativePath);
-    if (await File(fullPath).exists()) {
-      return fullPath;
-    }
-
-    return _findFileRecursive(jreRoot, Platform.isWindows ? 'jvm.dll' : (Platform.isMacOS ? 'libjvm.dylib' : 'libjvm.so'));
-  }
-
   Future<String?> get javaExecutablePath async {
     if (Platform.isAndroid) return null;
 
@@ -113,6 +83,9 @@ class RuntimePaths {
       }
       return _findFileRecursive(jreRoot, 'java');
     }
+
+    final linuxFound = await _findFileRecursive(jreRoot, 'java');
+    if (linuxFound != null) return linuxFound;
 
     return null;
   }

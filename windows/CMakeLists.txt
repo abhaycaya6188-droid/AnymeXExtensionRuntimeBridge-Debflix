@@ -49,26 +49,8 @@ target_include_directories(${PLUGIN_NAME} PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 
-set(BUNDLE_LIBS "")
-
-set(DARTJNI_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../build/windows-jni/dartjni.dll")
-if(NOT EXISTS "${DARTJNI_DLL}")
-  set(DARTJNI_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../build/jni_libs/dartjni.dll")
-endif()
-if(EXISTS "${DARTJNI_DLL}")
-  list(APPEND BUNDLE_LIBS "${DARTJNI_DLL}")
-endif()
-
-set(JNI_JAR "${CMAKE_CURRENT_SOURCE_DIR}/../build/windows-jni/jni.jar")
-if(NOT EXISTS "${JNI_JAR}")
-  set(JNI_JAR "${CMAKE_CURRENT_SOURCE_DIR}/../build/jni_libs/jni.jar")
-endif()
-if(EXISTS "${JNI_JAR}")
-  list(APPEND BUNDLE_LIBS "${JNI_JAR}")
-endif()
-
 set(anymex_extension_runtime_bridge_bundled_libraries
-  "${BUNDLE_LIBS}"
+  ""
   PARENT_SCOPE
 )
 

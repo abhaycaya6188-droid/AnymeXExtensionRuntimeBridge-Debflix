@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:collection/collection.dart';
 import 'PbDecoder.dart';
 import 'package:device_apps/device_apps.dart';
 import 'package:flutter/foundation.dart';

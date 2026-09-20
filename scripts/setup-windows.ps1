@@ -12,32 +12,34 @@ function Write-Banner {
     Write-Host ""
 }
 
-$DocsDir    = [Environment]::GetFolderPath('MyDocuments')
-$BaseDir    = Join-Path $DocsDir 'AnymeX'
-$ToolsDir   = Join-Path $BaseDir 'Tools'
-$JreDir     = Join-Path $ToolsDir 'jre'
-$Dex2JarDir = Join-Path $ToolsDir 'dex-tools-v2.4'
-$JarDest    = Join-Path $ToolsDir 'anymex_desktop_runtime.jar'
+$DocsDir      = [Environment]::GetFolderPath('MyDocuments')
+$BaseDir      = Join-Path $DocsDir 'AnymeX'
+$ToolsDir     = Join-Path $BaseDir 'Tools'
+$JreDir       = Join-Path $ToolsDir 'jre'
+$Dex2JarDir   = Join-Path $ToolsDir 'dex-tools-v2.4'
+$JarDest      = Join-Path $ToolsDir 'anymex_desktop_runtime.jar'
+$MetadataDest = Join-Path $ToolsDir 'metadata.json'
 
 $JarUrl     = 'https://github.com/RyanYuuki/AnymeXExtensionRuntimeBridge/releases/latest/download/anymex_desktop_runtime.jar'
 $JreUrl     = 'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12+7/OpenJDK17U-jre_x64_windows_hotspot_17.0.12_7.zip'
 $Dex2JarUrl = 'https://github.com/pxb1988/dex2jar/releases/download/v2.4/dex-tools-v2.4.zip'
+$ReleaseApi = 'https://api.github.com/repos/RyanYuuki/AnymeXExtensionRuntimeBridge/releases/latest'
 
 function Download-File {
     param([string]$Url, [string]$Dest, [string]$Label)
     Write-Step "Downloading $Label..."
     $tmp = "$Dest.tmp"
     try {
-        $req  = [System.Net.HttpWebRequest]::Create($Url)
+        $req = [System.Net.HttpWebRequest]::Create($Url)
         $req.AllowAutoRedirect = $true
-        $res  = $req.GetResponse()
-        $total = $res.ContentLength
+        $res    = $req.GetResponse()
+        $total  = $res.ContentLength
         $stream = $res.GetResponseStream()
-        $out  = [System.IO.File]::Create($tmp)
-        $buf  = New-Object byte[] 81920
-        $read = 0
-        $down = 0
-        $sw   = [System.Diagnostics.Stopwatch]::StartNew()
+        $out    = [System.IO.File]::Create($tmp)
+        $buf    = New-Object byte[] 81920
+        $read   = 0
+        $down   = 0
+        $sw     = [System.Diagnostics.Stopwatch]::StartNew()
 
         while (($read = $stream.Read($buf, 0, $buf.Length)) -gt 0) {
             $out.Write($buf, 0, $read)
@@ -95,6 +97,19 @@ foreach ($d in @($ToolsDir, $JreDir)) {
     if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 }
 
+Write-Step 'Fetching latest release info...'
+try {
+    $releaseJson = Invoke-RestMethod -Uri $ReleaseApi -Headers @{ 'User-Agent' = 'AnymeX-Setup' }
+    $releaseTag   = $releaseJson.tag_name
+    $releaseTitle = $releaseJson.name
+    if ([string]::IsNullOrWhiteSpace($releaseTitle)) { $releaseTitle = $releaseTag }
+    Write-OK "Latest release: $releaseTag"
+} catch {
+    Write-Host "  ⚠  Could not fetch release info — metadata.json will use placeholder version" -ForegroundColor Yellow
+    $releaseTag   = 'unknown'
+    $releaseTitle = 'unknown'
+}
+
 if ($ForceJar -or -not (Test-Path $JarDest)) {
     if (Test-Path $JarDest) { Remove-Item $JarDest -Force }
     Download-File -Url $JarUrl -Dest $JarDest -Label 'Bridge JAR'
@@ -130,6 +145,10 @@ if ($ForceDex2jar -or -not (Test-Path $d2jBat)) {
 } else {
     Write-OK 'dex2jar already present — use --force-dex2jar to re-download'
 }
+
+Write-Step 'Writing metadata.json...'
+@{ version = $releaseTag; title = $releaseTitle } | ConvertTo-Json -Compress | Set-Content -Path $MetadataDest -Encoding UTF8
+Write-OK "metadata.json written ($releaseTag)"
 
 Write-Host ""
 Write-Host "  ═══════════════════════════════════════════════" -ForegroundColor Magenta

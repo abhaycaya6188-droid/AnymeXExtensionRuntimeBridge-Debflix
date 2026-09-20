@@ -26,6 +26,5 @@ doc/api/
 .flutter-plugins
 .flutter-plugins-dependencies
 
-!build/jni_libs/
-!build/jni_libs/*
 test/
+/output

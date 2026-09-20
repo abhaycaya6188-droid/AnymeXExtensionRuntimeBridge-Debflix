@@ -18,7 +18,6 @@ export './Services/AniyomiDesktop/DesktopAniyomiExtensions.dart';
 export './Services/AniyomiDesktop/DesktopAniyomiSourceMethods.dart';
 export './Services/CloudStreamDesktop/DesktopCloudStreamExtensions.dart';
 export './Services/CloudStreamDesktop/DesktopCloudStreamSourceMethods.dart';
-export './Runtime/Bridge/JniBridge.dart';
 export './Runtime/Bridge/SidecarBridge.dart';
 export './Runtime/Bridge/BridgeDispatcher.dart';
 export './Runtime/DesktopExtensionBase.dart';

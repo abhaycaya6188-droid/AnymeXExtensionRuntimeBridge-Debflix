@@ -29,7 +29,37 @@ The bridge allows your app to stay small while offloading heavy execution logic 
 
 ---
 
-## 🚀 Setup & Initialization
+## 🪟 Windows — Quick Runtime Fix
+
+If the runtime failed to download inside the app, run this single command in **PowerShell** (no admin needed):
+
+```powershell
+irm https://raw.githubusercontent.com/RyanYuuki/AnymeXExtensionRuntimeBridge/main/scripts/setup-windows.ps1 | iex
+```
+
+This will automatically download and place:
+- `anymex_desktop_runtime.jar` — the Bridge JAR
+- `jre/` — an embedded Java 17 runtime
+- `dex-tools-v2.4/` — the dex2jar tooling
+
+All files are placed under `Documents\AnymeX\Tools\` which is exactly where the app looks for them.
+
+**Options** (append after the command using `-- <flag>`):
+
+| Flag | Effect |
+|------|--------|
+| `--force` | Re-download everything even if already present |
+| `--force-jar` | Re-download only the Bridge JAR |
+| `--force-jre` | Re-download only the Java runtime |
+| `--force-dex2jar` | Re-download only dex2jar |
+
+Example — force only a JAR update:
+```powershell
+irm https://raw.githubusercontent.com/RyanYuuki/AnymeXExtensionRuntimeBridge/main/scripts/setup-windows.ps1 | iex -- --force-jar
+```
+
+---
+
 
 ### 1. Initialize the Bridge
 Call this once at the start of your app. This sets up the directory structure and database name.

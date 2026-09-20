@@ -32,6 +32,13 @@ echo "[COPY] Copying to local runtime share directory: $LOCAL_SHARE_DIR/$DEST_FI
 mkdir -p "$LOCAL_SHARE_DIR"
 cp -f "build/libs/desktop_bridge.jar" "$LOCAL_SHARE_DIR/$DEST_FILE"
 
+APP_DATA_DIR="$HOME/.local/share/com.ryan.anymex/AnymeX/Runtime"
+if [[ -d "$HOME/.local/share/com.ryan.anymex" ]]; then
+    echo "[COPY] Copying to app data runtime directory: $APP_DATA_DIR/$DEST_FILE"
+    mkdir -p "$APP_DATA_DIR"
+    cp -f "build/libs/desktop_bridge.jar" "$APP_DATA_DIR/$DEST_FILE"
+fi
+
 echo "[DONE] Build and copy completed successfully!"
 echo
 echo "✅ JAR at: $DEST_DIR/$DEST_FILE"
