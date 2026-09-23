@@ -37,7 +37,7 @@ jobs:
           EOF
           chmod +x /tmp/csx/gradlew
           cd /tmp/csx
-          ./gradlew :CineStream:assembleDebug --no-daemon
+          ./gradlew -I "$GITHUB_WORKSPACE/tools/cinestream-jvm.init.gradle.kts" :CineStream:assembleDebug --no-daemon
       - name: Package source-compiled JVM classes as CineStream plugin
         run: |
           mkdir -p /tmp/cinestream-plugin
