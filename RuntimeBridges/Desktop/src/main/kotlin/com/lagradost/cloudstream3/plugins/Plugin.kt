@@ -1,17 +1,14 @@
 package com.lagradost.cloudstream3.plugins
 
+import android.content.Context
 import kotlin.Throws
 
 abstract class Plugin : BasePlugin() {
-    /**
-     * Called when your Plugin is loaded
-     */
     @Throws(Throwable::class)
-    open fun load(context: Any? = null) {
-        // If not overridden by an extension then try the cross-platform load()
+    open fun load(context: Context) {
         load()
     }
 
-    var openSettings: ((Any?) -> Unit)? = null
+    var openSettings: ((Context) -> Unit)? = null
         set(value) { field = value }
 }
