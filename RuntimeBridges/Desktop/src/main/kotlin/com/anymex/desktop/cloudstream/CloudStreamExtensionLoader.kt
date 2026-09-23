@@ -30,6 +30,9 @@ object CloudStreamExtensionLoader {
     private val scanMutex = Mutex()
     private val gson = Gson()
     private var initialized = false
+    @Volatile private var cineStreamDiagnostic = "provider-order: unavailable"
+
+    fun getCineStreamDiagnostic(): Map<String, Any?> = mapOf("summary" to cineStreamDiagnostic)
 
     fun initialize() {
         if (initialized) return
@@ -162,10 +165,12 @@ object CloudStreamExtensionLoader {
                     val settings = settingsClass.getField("INSTANCE").get(null)
                     settingsClass.getMethod("initSeenProviders").invoke(settings)
                     val active = settingsClass.getMethod("getActiveProviderOrder").invoke(settings) as? List<*>
-                    System.err.println("  [CS-CineStream] activeProviderOrder count=" + (active?.size ?: -1) + " keys=" + (active?.joinToString(",") ?: ""))
+                    cineStreamDiagnostic = "provider-order: " + (active?.size ?: -1) + " active [" + (active?.joinToString(",") ?: "") + "]"
+                    System.err.println("  [CS-CineStream] " + cineStreamDiagnostic)
                 } catch (diag: Throwable) {
                     val cause = diag.cause ?: diag
-                    System.err.println("  [CS-CineStream] settings diagnostic failed: ${cause.javaClass.simpleName}: ${cause.message}")
+                    cineStreamDiagnostic = "provider-order diagnostic failed: ${cause.javaClass.simpleName}: ${cause.message}"
+                    System.err.println("  [CS-CineStream] " + cineStreamDiagnostic)
                 }
             }
             val postApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
