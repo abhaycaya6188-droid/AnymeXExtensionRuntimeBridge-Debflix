@@ -72,7 +72,7 @@ jobs:
           {"id":"diag","method":"csGetDiagnostic","args":{}}
           {"id":"links","method":"csGetVideoList","args":{"sourceId":"cs_cinetmdb","url":"{\"id\":346364,\"imdbId\":\"tt15639572\",\"type\":\"movie\",\"title\":\"Backrooms\",\"year\":2026}"}}
           EOF
-          timeout 150s java -jar build/libs/desktop_bridge.jar < /tmp/cinestream-requests.jsonl 2>&1 | tee /tmp/cinestream-runtime.log || test $? -eq 124
+          # Keep stdin open while the sidecar completes its asynchronous RPC jobs.\n          { cat /tmp/cinestream-requests.jsonl; sleep 90; } | timeout 100s java -jar build/libs/desktop_bridge.jar 2>&1 | tee /tmp/cinestream-runtime.log || test $? -eq 124
           grep -q 'CineStream' /tmp/cinestream-runtime.log
           grep -Eq 'provider-order: [1-9][0-9]* active' /tmp/cinestream-runtime.log
           grep -q '"id":"links"' /tmp/cinestream-runtime.log
