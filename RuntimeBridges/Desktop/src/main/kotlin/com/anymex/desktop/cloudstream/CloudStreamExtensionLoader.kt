@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.lagradost.cloudstream3.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.DataStore
 import java.io.File
 import java.net.URLClassLoader
 import java.util.zip.ZipFile
@@ -34,7 +35,11 @@ object CloudStreamExtensionLoader {
         if (initialized) return
         
         val context = Application()
-        
+        // Match the Android runtime: CineStream reads these global stores during load().
+        DataStore.init(context.applicationContext)
+        AcraApplication.context = context.applicationContext
+        CloudStreamApp.context = context.applicationContext
+
         Injekt.addSingletonFactory<Application> { context }
         Injekt.addSingletonFactory<Context> { context }
         Injekt.addSingletonFactory { NetworkHelper(context) }
@@ -126,7 +131,7 @@ object CloudStreamExtensionLoader {
         
         if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
             val preApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
-            val context = android.app.Application()
+            val context = Injekt.get<Application>()
             val loadThread = Thread {
                 try {
                     val contextClass = android.content.Context::class.java
