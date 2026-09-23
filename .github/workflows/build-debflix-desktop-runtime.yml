@@ -37,7 +37,7 @@ jobs:
           EOF
           chmod +x /tmp/csx/gradlew
           cd /tmp/csx
-          sed -i 's/JvmTarget.JVM_1_8/JvmTarget.JVM_11/' build.gradle.kts
+          sed -i -e 's/JvmTarget.JVM_1_8/JvmTarget.JVM_11/' -e 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_11/g' build.gradle.kts
           ./gradlew :CineStream:assembleDebug --no-daemon
       - name: Package source-compiled JVM classes as CineStream plugin
         run: |
