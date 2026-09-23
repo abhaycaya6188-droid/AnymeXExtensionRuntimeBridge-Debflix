@@ -20,11 +20,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
       - name: Build patched desktop bridge
         working-directory: RuntimeBridges/Desktop
-        run: |
-          chmod +x gradlew
-          ./gradlew shadowJar --no-daemon
+        run: gradle shadowJar --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: anymex-desktop-runtime-debflix
