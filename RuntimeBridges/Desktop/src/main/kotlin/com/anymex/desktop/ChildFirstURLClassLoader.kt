@@ -26,7 +26,10 @@ class ChildFirstURLClassLoader(
     override fun loadClass(name: String?, resolve: Boolean): Class<*> {
         var c = findLoadedClass(name)
 
-        if (c == null && systemClassLoader != null) {
+        // CineStream must use the source-built classes from its own plugin JAR.
+        // Asking the system loader first can resurrect same-named classes from the
+        // desktop bridge/shadow JAR and bypass the generated serializers.
+        if (c == null && shouldDelegateToParent(name) && systemClassLoader != null) {
             try {
                 c = systemClassLoader.loadClass(name)
             } catch (_: ClassNotFoundException) {}
