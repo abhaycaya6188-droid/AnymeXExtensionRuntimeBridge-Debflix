@@ -1,0 +1,40 @@
+name: Build Debflix desktop runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'RuntimeBridges/Desktop/**'
+      - '.github/workflows/build-debflix-desktop-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build patched desktop bridge
+        working-directory: RuntimeBridges/Desktop
+        run: |
+          chmod +x gradlew
+          ./gradlew shadowJar --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anymex-desktop-runtime-debflix
+          path: RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
+          if-no-files-found: error
+      - name: Publish immutable runtime release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="cine-stream-context-${GITHUB_SHA}"
+          gh release create "$TAG" RuntimeBridges/Desktop/build/libs/desktop_bridge.jar \
+            --title "Debflix CineStream desktop runtime" \
+            --notes "Initializes CloudStream DataStore and application context before extension loading."
