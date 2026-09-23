@@ -41,7 +41,7 @@ jobs:
           ./gradlew :CineStream:assembleDebug --no-daemon
       - name: Package source-compiled JVM classes as CineStream plugin
         run: |
-          mkdir -p /tmp/cinestream-plugin
+          mkdir -p /tmp/cinestream-plugin RuntimeBridges/Desktop/build
           unzip -p /tmp/csx/CineStream/build/outputs/aar/CineStream-debug.aar classes.jar > RuntimeBridges/Desktop/build/cinestream-desktop.jar
           cat > /tmp/cinestream-plugin/manifest.json <<'EOF'
           {"name":"CineStream Desktop","pluginClassName":"com.megix.CineStream","version":487,"requiresResources":false,"tvTypes":["TvSeries","Movie","AsianDrama","Anime","Torrent"]}
