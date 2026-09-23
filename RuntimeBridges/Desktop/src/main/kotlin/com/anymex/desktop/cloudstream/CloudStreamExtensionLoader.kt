@@ -147,7 +147,7 @@ object CloudStreamExtensionLoader {
                         loadWithContext.invoke(instance, context)
                     } else {
                         System.err.println("  [CS] Calling load() on $className (no Context overload)")
-                        instance.load(null)
+                        instance.load(context)
                     }
                 } catch (e: Throwable) {
                     val cause = e.cause ?: e
