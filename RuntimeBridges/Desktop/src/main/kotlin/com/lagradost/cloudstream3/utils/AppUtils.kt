@@ -13,7 +13,9 @@ object AppUtils {
     }
 
     inline fun <reified T> parseJson(value: String): T {
-        return mapper.readValue(value)
+        // Explicit TypeReference keeps DEX-converted plugins on the desktop
+        // Jackson mapper instead of requiring generated kotlinx serializers.
+        return mapper.readValue(value, object : com.fasterxml.jackson.core.type.TypeReference<T>() {})
     }
 
     inline fun <reified T> parseJson(reader: Reader, valueType: Class<T>): T {
