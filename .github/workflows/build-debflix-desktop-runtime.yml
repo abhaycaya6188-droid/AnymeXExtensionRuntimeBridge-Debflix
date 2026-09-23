@@ -1,8 +1,8 @@
-name: Build Debflix desktop runtime\n# Rebuild corrected CineStream provider diagnostics
+name: Build CineStream JVM desktop runtime
 
 on:
   push:
-    branches: [main]
+    branches: [cinestream-jvm]
     paths:
       - 'RuntimeBridges/Desktop/**'
       - '.github/workflows/build-debflix-desktop-runtime.yml'
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-cinestream:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,19 +23,48 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Build patched desktop bridge
+      - name: Checkout pinned CSX CineStream source
+        run: |
+          git clone https://github.com/SaurabhKaperwan/CSX.git /tmp/csx
+          git -C /tmp/csx checkout 3bd036dee10fc4f7cf364ed3d50e6cf71563b4c0
+          mkdir -p RuntimeBridges/Desktop/src/cinestream/kotlin
+          cp -R /tmp/csx/CineStream/src/main/kotlin/. RuntimeBridges/Desktop/src/cinestream/kotlin/
+      - name: Build runtime and source-built CineStream plugin
         working-directory: RuntimeBridges/Desktop
-        run: gradle shadowJar --no-daemon
+        run: gradle shadowJar cineStreamDesktopJar --no-daemon
+      - name: Verify generated serialization support
+        working-directory: RuntimeBridges/Desktop
+        run: |
+          jar tf build/libs/cinestream-desktop.jar | grep -E 'CineTmdbProvider.*LinkData.*serializer'
+      - name: Exercise isolated CineStream registration and direct LinkData route
+        working-directory: RuntimeBridges/Desktop
+        run: |
+          mkdir -p /tmp/cinestream-runtime
+          cp build/libs/cinestream-desktop.jar /tmp/cinestream-runtime/CineStream.jar
+          cat > /tmp/cinestream-requests.jsonl <<'EOF'
+          {"id":"load","method":"csLoadExtensions","args":{"folderPath":"/tmp/cinestream-runtime"}}
+          {"id":"diag","method":"csGetDiagnostic","args":{}}
+          {"id":"links","method":"csGetVideoList","args":{"sourceId":"cs_cinetmdb","url":"{\"id\":346364,\"imdbId\":\"tt15639572\",\"type\":\"movie\",\"title\":\"Backrooms\",\"year\":2026}"}}
+          EOF
+          timeout 150s java -jar build/libs/desktop_bridge.jar < /tmp/cinestream-requests.jsonl 2>&1 | tee /tmp/cinestream-runtime.log || test $? -eq 124
+          grep -q 'CineStream' /tmp/cinestream-runtime.log
+          grep -Eq 'provider-order: [1-9][0-9]* active' /tmp/cinestream-runtime.log
+          grep -q '"id":"links"' /tmp/cinestream-runtime.log
       - uses: actions/upload-artifact@v4
         with:
-          name: anymex-desktop-runtime-debflix
-          path: RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
+          name: cinestream-jvm-runtime
+          path: |
+            RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
+            RuntimeBridges/Desktop/build/libs/cinestream-desktop.jar
+            /tmp/cinestream-runtime.log
           if-no-files-found: error
-      - name: Publish immutable runtime release
+      - name: Publish test runtime release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="cine-stream-context-${GITHUB_SHA}"
-          gh release create "$TAG" RuntimeBridges/Desktop/build/libs/desktop_bridge.jar \
-            --title "Debflix CineStream desktop runtime" \
-            --notes "Initializes CloudStream DataStore and application context before extension loading."
+          TAG="cinestream-jvm-${GITHUB_SHA}"
+          gh release create "$TAG" \
+            RuntimeBridges/Desktop/build/libs/desktop_bridge.jar \
+            RuntimeBridges/Desktop/build/libs/cinestream-desktop.jar \
+            --prerelease --title "Debflix CineStream JVM test runtime" \
+            --notes "Source-built from CSX 3bd036dee10fc4f7cf364ed3d50e6cf71563b4c0 with Kotlin serialization compiler support."
