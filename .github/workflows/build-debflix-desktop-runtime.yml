@@ -42,14 +42,11 @@ jobs:
       - name: Package source-compiled JVM classes as CineStream plugin
         run: |
           mkdir -p /tmp/cinestream-plugin
-          cp -R /tmp/csx/CineStream/build/tmp/kotlin-classes/debug/. /tmp/cinestream-plugin/
-          if [ -d /tmp/csx/CineStream/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes ]; then
-            cp -R /tmp/csx/CineStream/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/. /tmp/cinestream-plugin/
-          fi
+          unzip -p /tmp/csx/CineStream/build/outputs/aar/CineStream-debug.aar classes.jar > RuntimeBridges/Desktop/build/cinestream-desktop.jar
           cat > /tmp/cinestream-plugin/manifest.json <<'EOF'
           {"name":"CineStream Desktop","pluginClassName":"com.megix.CineStream","version":487,"requiresResources":false,"tvTypes":["TvSeries","Movie","AsianDrama","Anime","Torrent"]}
           EOF
-          jar cf RuntimeBridges/Desktop/build/cinestream-desktop.jar -C /tmp/cinestream-plugin .
+          jar uf RuntimeBridges/Desktop/build/cinestream-desktop.jar -C /tmp/cinestream-plugin manifest.json
       - name: Build isolated desktop runtime
         working-directory: RuntimeBridges/Desktop
         run: gradle shadowJar --no-daemon
