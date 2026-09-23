@@ -155,6 +155,19 @@ object CloudStreamExtensionLoader {
             loadThread.start()
             loadThread.join(10000L)
             
+            // CineStream keeps provider enable/order state in its plugin classloader.
+            if (className.contains("CineStream", ignoreCase = true)) {
+                try {
+                    val settingsClass = pluginClass.classLoader.loadClass("com.megix.settings.Settings")
+                    val settings = settingsClass.getField("INSTANCE").get(null)
+                    settingsClass.getMethod("initSeenProviders").invoke(settings)
+                    val active = settingsClass.getMethod("getActiveProviderOrder").invoke(settings) as? List<*>
+                    System.err.println("  [CS-CineStream] activeProviderOrder count=${active?.size ?: -1} keys=${active?.joinToString(\",\")}")
+                } catch (diag: Throwable) {
+                    val cause = diag.cause ?: diag
+                    System.err.println("  [CS-CineStream] settings diagnostic failed: ${cause.javaClass.simpleName}: ${cause.message}")
+                }
+            }
             val postApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
             val newApis = postApis.filter { it !in preApis }
             if (newApis.isNotEmpty()) {
