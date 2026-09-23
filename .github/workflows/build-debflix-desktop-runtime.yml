@@ -23,24 +23,42 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Checkout pinned CSX CineStream source
+      - name: Checkout pinned CSX source and compile it normally
         run: |
           git clone https://github.com/SaurabhKaperwan/CSX.git /tmp/csx
           git -C /tmp/csx checkout 3bd036dee10fc4f7cf364ed3d50e6cf71563b4c0
-          mkdir -p RuntimeBridges/Desktop/src/cinestream/kotlin
-          cp -R /tmp/csx/CineStream/src/main/kotlin/. RuntimeBridges/Desktop/src/cinestream/kotlin/
-      - name: Build runtime and source-built CineStream plugin
-        working-directory: RuntimeBridges/Desktop
-        run: gradle shadowJar cineStreamDesktopJar --no-daemon
-      - name: Verify generated serialization support
-        working-directory: RuntimeBridges/Desktop
+          cat > /tmp/csx/local.properties <<'EOF'
+          SIMKL_API=
+          TMDB_KEY=
+          CASTLE_KEY=
+          MOVIEBLAST_TOKEN=
+          MOVIEBLAST_API=
+          MOVIEBLAST_KEY=
+          EOF
+          chmod +x /tmp/csx/gradlew
+          cd /tmp/csx
+          ./gradlew :CineStream:assembleDebug --no-daemon
+      - name: Package source-compiled JVM classes as CineStream plugin
         run: |
-          jar tf build/libs/cinestream-desktop.jar | grep -E 'CineTmdbProvider.*LinkData.*serializer'
+          mkdir -p /tmp/cinestream-plugin
+          cp -R /tmp/csx/CineStream/build/tmp/kotlin-classes/debug/. /tmp/cinestream-plugin/
+          if [ -d /tmp/csx/CineStream/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes ]; then
+            cp -R /tmp/csx/CineStream/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/. /tmp/cinestream-plugin/
+          fi
+          cat > /tmp/cinestream-plugin/manifest.json <<'EOF'
+          {"name":"CineStream Desktop","pluginClassName":"com.megix.CineStream","version":487,"requiresResources":false,"tvTypes":["TvSeries","Movie","AsianDrama","Anime","Torrent"]}
+          EOF
+          jar cf RuntimeBridges/Desktop/build/cinestream-desktop.jar -C /tmp/cinestream-plugin .
+      - name: Build isolated desktop runtime
+        working-directory: RuntimeBridges/Desktop
+        run: gradle shadowJar --no-daemon
+      - name: Verify generated serialization support
+        run: jar tf RuntimeBridges/Desktop/build/cinestream-desktop.jar | grep -E 'CineTmdbProvider.*LinkData.*serializer'
       - name: Exercise isolated CineStream registration and direct LinkData route
         working-directory: RuntimeBridges/Desktop
         run: |
           mkdir -p /tmp/cinestream-runtime
-          cp build/libs/cinestream-desktop.jar /tmp/cinestream-runtime/CineStream.jar
+          cp build/cinestream-desktop.jar /tmp/cinestream-runtime/CineStream.jar
           cat > /tmp/cinestream-requests.jsonl <<'EOF'
           {"id":"load","method":"csLoadExtensions","args":{"folderPath":"/tmp/cinestream-runtime"}}
           {"id":"diag","method":"csGetDiagnostic","args":{}}
@@ -55,7 +73,7 @@ jobs:
           name: cinestream-jvm-runtime
           path: |
             RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
-            RuntimeBridges/Desktop/build/libs/cinestream-desktop.jar
+            RuntimeBridges/Desktop/build/cinestream-desktop.jar
             /tmp/cinestream-runtime.log
           if-no-files-found: error
       - name: Publish test runtime release
@@ -65,6 +83,6 @@ jobs:
           TAG="cinestream-jvm-${GITHUB_SHA}"
           gh release create "$TAG" \
             RuntimeBridges/Desktop/build/libs/desktop_bridge.jar \
-            RuntimeBridges/Desktop/build/libs/cinestream-desktop.jar \
+            RuntimeBridges/Desktop/build/cinestream-desktop.jar \
             --prerelease --title "Debflix CineStream JVM test runtime" \
             --notes "Source-built from CSX 3bd036dee10fc4f7cf364ed3d50e6cf71563b4c0 with Kotlin serialization compiler support."
