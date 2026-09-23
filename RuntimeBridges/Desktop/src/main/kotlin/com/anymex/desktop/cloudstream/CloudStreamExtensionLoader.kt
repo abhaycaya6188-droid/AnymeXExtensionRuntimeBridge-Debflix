@@ -162,7 +162,7 @@ object CloudStreamExtensionLoader {
                     val settings = settingsClass.getField("INSTANCE").get(null)
                     settingsClass.getMethod("initSeenProviders").invoke(settings)
                     val active = settingsClass.getMethod("getActiveProviderOrder").invoke(settings) as? List<*>
-                    System.err.println("  [CS-CineStream] activeProviderOrder count=${active?.size ?: -1} keys=${active?.joinToString(\",\")}")
+                    System.err.println("  [CS-CineStream] activeProviderOrder count=" + (active?.size ?: -1) + " keys=" + (active?.joinToString(",") ?: ""))
                 } catch (diag: Throwable) {
                     val cause = diag.cause ?: diag
                     System.err.println("  [CS-CineStream] settings diagnostic failed: ${cause.javaClass.simpleName}: ${cause.message}")
