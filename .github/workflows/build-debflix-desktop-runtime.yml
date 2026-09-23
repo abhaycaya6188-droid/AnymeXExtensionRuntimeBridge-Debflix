@@ -1,4 +1,4 @@
-name: Build Debflix desktop runtime
+name: Build Debflix desktop runtime\n# Rebuild corrected CineStream provider diagnostics
 
 on:
   push:
