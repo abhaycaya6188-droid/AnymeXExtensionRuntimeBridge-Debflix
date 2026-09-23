@@ -18,12 +18,14 @@ java {
 
 sourceSets {
     main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-        kotlin {
-            srcDirs = ['src/main/kotlin', 'src/main/java']
-        }
+        java { srcDirs = ['src/main/java'] }
+        kotlin { srcDirs = ['src/main/kotlin', 'src/main/java'] }
+    }
+    cinestream {
+        java { srcDirs = [] }
+        kotlin { srcDirs = ['src/cinestream/kotlin', 'src/cinestream/generated'] }
+        compileClasspath += main.output + configurations.runtimeClasspath
+        runtimeClasspath += output + compileClasspath
     }
 }
 
@@ -81,6 +83,15 @@ tasks.register("shadowJar", Jar) {
     }
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
+}
+
+tasks.register("cineStreamDesktopJar", Jar) {
+    dependsOn tasks.named("cinestreamClasses")
+    archiveBaseName.set("cinestream-desktop")
+    archiveVersion.set("")
+    duplicatesStrategy(DuplicatesStrategy.EXCLUDE)
+    from sourceSets.cinestream.output
+    from("src/cinestream/resources")
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
