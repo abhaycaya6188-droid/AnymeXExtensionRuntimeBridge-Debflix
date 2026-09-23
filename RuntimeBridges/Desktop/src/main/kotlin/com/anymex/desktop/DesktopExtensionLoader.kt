@@ -391,4 +391,9 @@ fun main(args: Array<String>) = runBlocking {
             }
         }
     }
+
+    // A one-shot desktop client may close stdin immediately after writing its RPCs.
+    // Drain the already accepted jobs before the process exits, so their replies are not lost.
+    bridgeScope.coroutineContext[Job]?.children?.toList()?.joinAll()
+    bridgeScope.cancel()
 }
