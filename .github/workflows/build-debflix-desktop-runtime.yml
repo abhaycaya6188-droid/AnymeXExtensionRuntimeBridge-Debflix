@@ -44,6 +44,10 @@ jobs:
           chmod +x /tmp/csx/gradlew
           cd /tmp/csx
           sed -i -e 's/JvmTarget.JVM_1_8/JvmTarget.JVM_11/' -e 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_11/g' build.gradle.kts
+          # CSX declares kotlinx-serialization-json but does not apply the compiler plugin.
+          # Apply it while building the desktop-specific JAR so @Serializable emits LinkData$serializer.
+          sed -i '/kotlin-gradle-plugin:2.3.20/a\\        classpath("org.jetbrains.kotlin:kotlin-serialization:2.3.20")' build.gradle.kts
+          sed -i '/apply(plugin = "com.lagradost.cloudstream3.gradle")/a\\    apply(plugin = "org.jetbrains.kotlin.plugin.serialization")' build.gradle.kts
           ./gradlew :CineStream:assembleDebug --no-daemon
       - name: Package source-compiled JVM classes as CineStream plugin
         run: |
