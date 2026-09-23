@@ -256,6 +256,9 @@ fun main(args: Array<String>) = runBlocking {
                             val path = getSafeString("folderPath")
                             com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadExtensions(path)
                         }
+                        "csGetDiagnostic" -> {
+                            com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.getCineStreamDiagnostic()
+                        }
                         "csSearch" -> {
                             val sourceId = getSafeString("sourceId")
                             val query = getSafeString("query")
