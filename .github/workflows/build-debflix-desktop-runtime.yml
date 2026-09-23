@@ -37,10 +37,10 @@ jobs:
           EOF
           # The upstream models are passed to CloudStream's kotlinx parseJson helper
           # but lack the serializer marker needed by a JVM plugin JAR.
-          sed -i '1i import kotlinx.serialization.Serializable' CineStream/src/main/kotlin/com/megix/CineTmdbProvider.kt
-          sed -i 's/^    data class LinkData(/    @Serializable\n    data class LinkData(/' CineStream/src/main/kotlin/com/megix/CineTmdbProvider.kt
-          sed -i '1i import kotlinx.serialization.Serializable' CineStream/src/main/kotlin/com/megix/CineSimklProvider.kt
-          sed -i 's/^    data class SimklResponse(/    @Serializable\n    data class SimklResponse(/' CineStream/src/main/kotlin/com/megix/CineSimklProvider.kt
+          sed -i '1i import kotlinx.serialization.Serializable' /tmp/csx/CineStream/src/main/kotlin/com/megix/CineTmdbProvider.kt
+          sed -i 's/^    data class LinkData(/    @Serializable\n    data class LinkData(/' /tmp/csx/CineStream/src/main/kotlin/com/megix/CineTmdbProvider.kt
+          sed -i '1i import kotlinx.serialization.Serializable' /tmp/csx/CineStream/src/main/kotlin/com/megix/CineSimklProvider.kt
+          sed -i 's/^    data class SimklResponse(/    @Serializable\n    data class SimklResponse(/' /tmp/csx/CineStream/src/main/kotlin/com/megix/CineSimklProvider.kt
           chmod +x /tmp/csx/gradlew
           cd /tmp/csx
           sed -i -e 's/JvmTarget.JVM_1_8/JvmTarget.JVM_11/' -e 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_11/g' build.gradle.kts
