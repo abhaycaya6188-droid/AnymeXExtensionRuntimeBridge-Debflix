@@ -219,6 +219,24 @@ object CloudStreamExtensionLoader {
             }
             jsonArray.add(extObj)
             loadedMap[idStr] = apiInstance
+
+            // CineStream owns Fibwatch as the internal ProviderRegistry entry
+            // p_fibwatch. Expose a desktop-only alias backed by the same MainAPI
+            // instance so Debflix can scan it independently and filter callbacks
+            // to FibWatch without inventing a standalone .cs3 package.
+            if (apiInstance.name.contains("CineStream", ignoreCase = true)) {
+                val fibwatchId = "cs_cinestream_fibwatch"
+                if (!jsonArray.any { it.asJsonObject.get("id").asString == fibwatchId }) {
+                    val fibwatchObj = extObj.deepCopy().apply {
+                        addProperty("id", fibwatchId)
+                        addProperty("name", "Fibwatch")
+                        addProperty("className", "CineStream/Fibwatch")
+                    }
+                    jsonArray.add(fibwatchObj)
+                }
+                loadedMap[fibwatchId] = apiInstance
+                System.err.println("  [CS-CineStream] Exposed internal p_fibwatch as $fibwatchId")
+            }
         }
     }
 
