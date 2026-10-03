@@ -283,6 +283,29 @@ fun main(args: Array<String>) = runBlocking {
                             }
                             "completed"
                         }
+                        "csCineStreamProviderLinks" -> {
+                            val sourceId = getSafeString("sourceId")
+                            val providerKey = getSafeString("providerKey")
+                            val title = getSafeString("title")
+                            val year = getSafeInt("year", 0).takeIf { it > 0 }
+                            val season = getSafeInt("season", 0).takeIf { it > 0 }
+                            val episode = getSafeInt("episode", 0).takeIf { it > 0 }
+                            val imdbId = getSafeString("imdbId").takeIf { it.isNotBlank() }
+                            val tmdbId = getSafeInt("tmdbId", 0).takeIf { it > 0 }
+                            com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchCineStreamProviderLinks(
+                                sourceId = sourceId,
+                                providerKey = providerKey,
+                                title = title,
+                                year = year,
+                                season = season,
+                                episode = episode,
+                                imdbId = imdbId,
+                                tmdbId = tmdbId,
+                            ) { linkJson ->
+                                sendResponse(linkJson, "partial")
+                            }
+                            "completed"
+                        }
                         "kotatsuLoadExtensions" -> {
                             val path = getSafeString("folderPath")
                             com.anymex.desktop.kotatsu.KotatsuExtensionLoader.loadExtensions(path)
