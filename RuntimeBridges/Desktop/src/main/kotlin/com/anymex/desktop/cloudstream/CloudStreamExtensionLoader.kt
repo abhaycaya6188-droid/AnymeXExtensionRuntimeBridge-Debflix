@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeout
+import java.lang.reflect.InvocationTargetException
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 
 object CloudStreamExtensionLoader {
     val loadedMap = ConcurrentHashMap<String, MainAPI>()
@@ -31,8 +33,14 @@ object CloudStreamExtensionLoader {
     private val gson = Gson()
     private var initialized = false
     @Volatile private var cineStreamDiagnostic = "provider-order: unavailable"
+    @Volatile private var cineStreamClassLoader: ClassLoader? = null
+    @Volatile private var fibwatchAvailable = false
 
-    fun getCineStreamDiagnostic(): Map<String, Any?> = mapOf("summary" to cineStreamDiagnostic)
+    fun getCineStreamDiagnostic(): Map<String, Any?> = mapOf(
+        "summary" to cineStreamDiagnostic,
+        "fibwatchAvailable" to fibwatchAvailable,
+        "fibwatchProviderKey" to if (fibwatchAvailable) "p_fibwatch" else null,
+    )
 
     fun initialize() {
         if (initialized) return
@@ -161,6 +169,7 @@ object CloudStreamExtensionLoader {
             // CineStream keeps provider enable/order state in its plugin classloader.
             if (className.contains("CineStream", ignoreCase = true)) {
                 try {
+                    cineStreamClassLoader = pluginClass.classLoader
                     val settingsClass = pluginClass.classLoader.loadClass("com.megix.settings.Settings")
                     val settings = settingsClass.getField("INSTANCE").get(null)
                     settingsClass.getMethod("initSeenProviders").invoke(settings)
@@ -171,6 +180,15 @@ object CloudStreamExtensionLoader {
                     val cause = diag.cause ?: diag
                     cineStreamDiagnostic = "provider-order diagnostic failed: ${cause.javaClass.simpleName}: ${cause.message}"
                     System.err.println("  [CS-CineStream] " + cineStreamDiagnostic)
+                }
+                try {
+                    val provider = findCineStreamProvider(pluginClass.classLoader, "p_fibwatch")
+                    fibwatchAvailable = provider != null
+                    System.err.println("  [CS-CineStream] p_fibwatch registry entry present=$fibwatchAvailable")
+                } catch (diag: Throwable) {
+                    fibwatchAvailable = false
+                    val cause = diag.cause ?: diag
+                    System.err.println("  [CS-CineStream] p_fibwatch registry check failed: ${cause.javaClass.simpleName}: ${cause.message}")
                 }
             }
             val postApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
@@ -219,23 +237,71 @@ object CloudStreamExtensionLoader {
             }
             jsonArray.add(extObj)
             loadedMap[idStr] = apiInstance
+        }
+    }
 
-            // CineStream owns Fibwatch as the internal ProviderRegistry entry
-            // p_fibwatch. Expose a desktop-only alias backed by the same MainAPI
-            // instance so Debflix can scan it independently and filter callbacks
-            // to FibWatch without inventing a standalone .cs3 package.
-            if (apiInstance.name.contains("CineStream", ignoreCase = true)) {
-                val fibwatchId = "cs_cinestream_fibwatch"
-                if (!jsonArray.any { it.asJsonObject.get("id").asString == fibwatchId }) {
-                    val fibwatchObj = extObj.deepCopy().apply {
-                        addProperty("id", fibwatchId)
-                        addProperty("name", "Fibwatch")
-                        addProperty("className", "CineStream/Fibwatch")
-                    }
-                    jsonArray.add(fibwatchObj)
+    private fun findCineStreamProvider(loader: ClassLoader, providerKey: String): Any? {
+        val registryClass = loader.loadClass("com.megix.ProviderRegistry")
+        val registry = registryClass.getField("INSTANCE").get(null)
+        val providers = registryClass.getMethod("getBuiltInProviders").invoke(registry) as? Iterable<*>
+            ?: return null
+        return providers.firstOrNull { provider ->
+            provider != null && provider.javaClass.getMethod("getKey").invoke(provider) == providerKey
+        }
+    }
+
+    /**
+     * Execute a single CineStream ProviderRegistry entry. This intentionally does
+     * not call CineStream MainAPI.loadLinks: only callbacks emitted by p_fibwatch
+     * can cross this RPC boundary.
+     */
+    suspend fun fetchCineStreamProviderLinks(
+        sourceId: String,
+        providerKey: String,
+        title: String,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        imdbId: String?,
+        tmdbId: Int?,
+        onLinkFound: (String) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        require(providerKey == "p_fibwatch") { "Only p_fibwatch is exposed by this RPC" }
+        require(sourceId == "debflix-fibwatch") { "Invalid CineStream internal provider sourceId" }
+        require(title.isNotBlank()) { "title is required" }
+
+        val loader = cineStreamClassLoader ?: error("CineStream plugin classloader is not loaded")
+        val provider = findCineStreamProvider(loader, providerKey)
+            ?: error("CineStream ProviderRegistry does not contain $providerKey")
+        val action = provider.javaClass.getMethod("getExecuteStandard").invoke(provider)
+            ?: error("$providerKey has no executeStandard action")
+        val extractorsClass = loader.loadClass("com.megix.CineStreamExtractors")
+        val extractors = extractorsClass.getField("INSTANCE").get(null)
+        val dataClass = loader.loadClass("com.megix.AllLoadLinksData")
+        val constructor = dataClass.declaredConstructors.firstOrNull { it.parameterCount == 19 }
+            ?: error("Unsupported AllLoadLinksData constructor")
+        constructor.isAccessible = true
+        val data = constructor.newInstance(
+            title, imdbId, tmdbId, null, null, null,
+            year, year, season, episode,
+            false, false, false, false,
+            title, null, null, null, null,
+        )
+        val subtitleCallback: (Any?) -> Unit = { }
+        val linkCallback: (Any?) -> Unit = { link ->
+            if (link != null) onLinkFound(gson.toJson(link))
+        }
+        val invoke = action.javaClass.methods.firstOrNull { it.name == "invoke" && it.parameterCount == 5 }
+            ?: error("Unsupported executeStandard function shape")
+        invoke.isAccessible = true
+
+        withTimeout(60000L) {
+            suspendCoroutineUninterceptedOrReturn<Unit> { continuation ->
+                try {
+                    invoke.invoke(action, extractors, data, subtitleCallback, linkCallback, continuation)
+                } catch (error: InvocationTargetException) {
+                    throw (error.targetException ?: error)
                 }
-                loadedMap[fibwatchId] = apiInstance
-                System.err.println("  [CS-CineStream] Exposed internal p_fibwatch as $fibwatchId")
             }
         }
     }
