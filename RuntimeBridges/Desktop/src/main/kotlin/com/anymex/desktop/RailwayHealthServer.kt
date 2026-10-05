@@ -69,20 +69,26 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
 
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
-    com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.initialize()
-    val extDir = System.getenv("CS_EXTENSIONS_DIR")?.trim().orEmpty()
-    if (extDir.isNotEmpty() && java.io.File(extDir).isDirectory) {
-        runBlocking {
-            try {
-                System.err.println("Loading extensions from $extDir...")
-                com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadExtensions(extDir)
-            } catch (e: Exception) {
-                System.err.println("Failed loading extensions from $extDir: ${e.message}")
-            }
-        }
-    }
     RailwayHealthServer(port).apply {
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
         System.err.println("Debflix CS Railway server listening on port " + port)
+    }
+    com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.initialize()
+    val extDir = System.getenv("CS_EXTENSIONS_DIR")?.trim().orEmpty()
+    if (extDir.isNotEmpty() && java.io.File(extDir).isDirectory) {
+        Thread {
+            try {
+                System.err.println("Loading extensions from $extDir...")
+                runBlocking {
+                    com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadExtensions(extDir)
+                }
+                System.err.println("Loaded " + com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.size + " extension(s).")
+            } catch (e: Exception) {
+                System.err.println("Failed loading extensions from $extDir: ${e.message}")
+            }
+        }.apply {
+            isDaemon = false
+            start()
+        }
     }
 }
