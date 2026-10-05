@@ -12,7 +12,28 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val allowedMethods = setOf("csSearch", "csGetDetail")
 
     override fun serve(session: IHTTPSession): Response {
-        if (session.uri == "/" || session.uri == "/health") return json(Response.Status.OK, mapOf("ok" to true, "service" to "debflix-cs-runtime", "mode" to "controlled-rpc", "rpcEnabled" to (token.isNotEmpty() && allowedSources.isNotEmpty())))
+        if (session.uri == "/" || session.uri == "/health") {
+            val loadedKeys = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.keys().toList().sorted()
+            return json(Response.Status.OK, mapOf(
+                "ok" to true,
+                "service" to "debflix-cs-runtime",
+                "mode" to "controlled-rpc",
+                "rpcEnabled" to (token.isNotEmpty() && allowedSources.isNotEmpty()),
+                "loadedCount" to loadedKeys.size,
+                "loadedProviders" to loadedKeys
+            ))
+        }
+        if (session.uri == "/diagnostics") {
+            val loaded = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.entries.map { (k, v) ->
+                mapOf("id" to k, "name" to v.name, "lang" to v.lang, "mainUrl" to v.mainUrl)
+            }
+            return json(Response.Status.OK, mapOf(
+                "ok" to true,
+                "count" to loaded.size,
+                "providers" to loaded,
+                "allowedSources" to allowedSources.toList().sorted()
+            ))
+        }
         if (session.uri != "/rpc" || session.method != Method.POST) return json(Response.Status.NOT_FOUND, mapOf("error" to "not_found"))
         if (token.isEmpty() || allowedSources.isEmpty()) return json(Response.Status.SERVICE_UNAVAILABLE, mapOf("error" to "rpc_not_configured"))
         if (session.headers["authorization"].orEmpty() != "Bearer $token") return json(Response.Status.UNAUTHORIZED, mapOf("error" to "unauthorized"))
@@ -49,6 +70,17 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.initialize()
+    val extDir = System.getenv("CS_EXTENSIONS_DIR")?.trim().orEmpty()
+    if (extDir.isNotEmpty() && java.io.File(extDir).isDirectory) {
+        runBlocking {
+            try {
+                System.err.println("Loading extensions from $extDir...")
+                com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadExtensions(extDir)
+            } catch (e: Exception) {
+                System.err.println("Failed loading extensions from $extDir: ${e.message}")
+            }
+        }
+    }
     RailwayHealthServer(port).apply {
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
         System.err.println("Debflix CS Railway server listening on port " + port)
