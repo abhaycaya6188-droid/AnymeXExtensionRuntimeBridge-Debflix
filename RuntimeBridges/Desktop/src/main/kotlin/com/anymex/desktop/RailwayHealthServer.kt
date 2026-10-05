@@ -9,7 +9,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
     private val allowedSources = System.getenv("CS_ALLOWED_SOURCE_IDS")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
-    private val allowedMethods = setOf("csSearch", "csGetDetail")
+    private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList")
 
     override fun serve(session: IHTTPSession): Response {
         if (session.uri == "/" || session.uri == "/health") {
@@ -54,6 +54,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 when (method) {
                     "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, args.get("query")?.asString.orEmpty(), args.get("page")?.asInt ?: 1)
                     "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, args.get("url")?.asString.orEmpty())
+                    "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, args.get("url")?.asString.orEmpty())
                     else -> "{}"
                 }
             }
