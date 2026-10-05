@@ -1,7 +1,7 @@
 FROM gradle:8.10-jdk17 AS build
 WORKDIR /src
 COPY . .
-RUN cd RuntimeBridges/Desktop && ./gradlew shadowJar --no-daemon
+RUN cd RuntimeBridges/Desktop && chmod +x gradlew && ./gradlew shadowJar --no-daemon
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
