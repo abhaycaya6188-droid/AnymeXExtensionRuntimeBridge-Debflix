@@ -20,7 +20,12 @@ class ChildFirstURLClassLoader(
                name.startsWith("android.") ||
                name.startsWith("com.anymex.") ||
                name.startsWith("eu.kanade.tachiyomi.network.") ||
-               name.startsWith("eu.kanade.tachiyomi.PreferenceScreen")
+               name.startsWith("eu.kanade.tachiyomi.PreferenceScreen") ||
+               name.startsWith("com.fasterxml.jackson.") ||
+               name.startsWith("com.lagradost.") ||
+               name.startsWith("org.jsoup.") ||
+               name.startsWith("com.google.gson.") ||
+               name.startsWith("org.json.")
     }
 
     override fun loadClass(name: String?, resolve: Boolean): Class<*> {

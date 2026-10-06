@@ -6,6 +6,7 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.runBlocking
 
 object DiagnosticsLog {
+    val startupLogs = java.util.concurrent.CopyOnWriteArrayList<String>()
     val logs = java.util.concurrent.CopyOnWriteArrayList<String>()
 }
 
@@ -36,6 +37,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "count" to loaded.size,
                 "providers" to loaded,
                 "allowedSources" to allowedSources.toList().sorted(),
+                "startupLogs" to DiagnosticsLog.startupLogs.take(150),
                 "logs" to DiagnosticsLog.logs.takeLast(100)
             ))
         }
@@ -80,6 +82,7 @@ fun main() {
             override fun println(x: String?) {
                 origErr.println(x)
                 if (x != null) {
+                    if (DiagnosticsLog.startupLogs.size < 200) DiagnosticsLog.startupLogs.add(x)
                     if (DiagnosticsLog.logs.size > 250) DiagnosticsLog.logs.removeAt(0)
                     DiagnosticsLog.logs.add(x)
                 }
@@ -87,6 +90,7 @@ fun main() {
             override fun print(x: String?) {
                 origErr.print(x)
                 if (x != null) {
+                    if (DiagnosticsLog.startupLogs.size < 200) DiagnosticsLog.startupLogs.add(x)
                     if (DiagnosticsLog.logs.size > 250) DiagnosticsLog.logs.removeAt(0)
                     DiagnosticsLog.logs.add(x)
                 }

@@ -65,6 +65,18 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
     suspend fun getDetails(url: String): Map<String, Any?> {
         System.err.println("[CS-Methods] getDetails called for '${provider.name}' with url='$url'")
         val normalizedUrl = if (provider.name.equals("CineTv", ignoreCase = true) && !url.contains(",")) "$url,1" else url
+        if (provider.name.equals("CineTv", ignoreCase = true)) {
+            try {
+                val mapperField = provider.javaClass.getDeclaredField("mapper")
+                mapperField.isAccessible = true
+                val currentMapper = mapperField.get(provider) as? com.fasterxml.jackson.databind.ObjectMapper
+                if (currentMapper != null) {
+                    currentMapper.setTypeFactory(currentMapper.typeFactory.withClassLoader(provider.javaClass.classLoader))
+                }
+            } catch (t: Throwable) {
+                System.err.println("[CS-Methods] CineTv mapper setup notice: ${t.message}")
+            }
+        }
         val res = try {
             val r = provider.load(normalizedUrl)
             if (r == null) {
@@ -133,6 +145,18 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
         if (isInvalidData(effectiveData)) {
             Log.w(TAG, "isInvalidData returned true for: $effectiveData")
             return emptyList()
+        }
+        if (provider.name.equals("CineTv", ignoreCase = true)) {
+            try {
+                val mapperField = provider.javaClass.getDeclaredField("mapper")
+                mapperField.isAccessible = true
+                val currentMapper = mapperField.get(provider) as? com.fasterxml.jackson.databind.ObjectMapper
+                if (currentMapper != null) {
+                    currentMapper.setTypeFactory(currentMapper.typeFactory.withClassLoader(provider.javaClass.classLoader))
+                }
+            } catch (t: Throwable) {
+                System.err.println("[CS-Methods] CineTv mapper setup notice: ${t.message}")
+            }
         }
         val links = java.util.concurrent.CopyOnWriteArrayList<Map<String, Any?>>()
         val subtitles = java.util.concurrent.CopyOnWriteArrayList<Map<String, Any?>>()

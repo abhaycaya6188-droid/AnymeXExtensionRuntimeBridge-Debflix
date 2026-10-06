@@ -144,7 +144,9 @@ object CloudStreamExtensionLoader {
             val preApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
             val context = Injekt.get<Application>()
             val loadThread = Thread {
+                val origCl = Thread.currentThread().contextClassLoader
                 try {
+                    Thread.currentThread().contextClassLoader = pluginClass.classLoader
                     val contextClass = android.content.Context::class.java
                     val loadWithContext = try {
                         pluginClass.getMethod("load", contextClass)
@@ -160,6 +162,8 @@ object CloudStreamExtensionLoader {
                 } catch (e: Throwable) {
                     val cause = e.cause ?: e
                     System.err.println("  [CS] load() failed for $className: ${cause.javaClass.simpleName}: ${cause.message}")
+                } finally {
+                    Thread.currentThread().contextClassLoader = origCl
                 }
             }
             loadThread.isDaemon = true
@@ -360,7 +364,9 @@ object CloudStreamExtensionLoader {
 
     suspend fun search(sourceId: String, query: String, page: Int): String = withContext(Dispatchers.IO) {
         val api = loadedMap[sourceId] ?: return@withContext "{\"list\": [], \"hasNextPage\": false}"
+        val origCl = Thread.currentThread().contextClassLoader
         try {
+            Thread.currentThread().contextClassLoader = api.javaClass.classLoader
             withTimeout(60000L) {
                 val methods = CloudStreamSourceMethods(api)
                 val result = methods.search(query, page)
@@ -370,12 +376,16 @@ object CloudStreamExtensionLoader {
             System.err.println("[CS-Loader] ERROR: Outer search wrapper failed for $sourceId: ${e.message}")
             e.printStackTrace()
             "{\"list\": [], \"hasNextPage\": false}"
+        } finally {
+            Thread.currentThread().contextClassLoader = origCl
         }
     }
 
     suspend fun fetchDetails(sourceId: String, url: String): String = withContext(Dispatchers.IO) {
         val api = loadedMap[sourceId] ?: return@withContext "{}"
+        val origCl = Thread.currentThread().contextClassLoader
         try {
+            Thread.currentThread().contextClassLoader = api.javaClass.classLoader
             withTimeout(60000L) {
                 val methods = CloudStreamSourceMethods(api)
                 val result = methods.getDetails(url)
@@ -383,12 +393,16 @@ object CloudStreamExtensionLoader {
             }
         } catch (e: Throwable) {
             "{}"
+        } finally {
+            Thread.currentThread().contextClassLoader = origCl
         }
     }
 
     suspend fun fetchVideoList(sourceId: String, url: String): String = withContext(Dispatchers.IO) {
         val api = loadedMap[sourceId] ?: return@withContext "[]"
+        val origCl = Thread.currentThread().contextClassLoader
         try {
+            Thread.currentThread().contextClassLoader = api.javaClass.classLoader
             withTimeout(60000L) {
                 val methods = CloudStreamSourceMethods(api)
                 val links = methods.loadLinks(url)
@@ -396,12 +410,16 @@ object CloudStreamExtensionLoader {
             }
         } catch (e: Throwable) {
             "[]"
+        } finally {
+            Thread.currentThread().contextClassLoader = origCl
         }
     }
 
     suspend fun fetchVideoListStream(sourceId: String, url: String, onLinkFound: (String) -> Unit) = withContext(Dispatchers.IO) {
         val api = loadedMap[sourceId] ?: return@withContext
+        val origCl = Thread.currentThread().contextClassLoader
         try {
+            Thread.currentThread().contextClassLoader = api.javaClass.classLoader
             withTimeout(120000L) {
                 val methods = CloudStreamSourceMethods(api)
                 methods.loadLinksStream(url) { link ->
@@ -409,6 +427,8 @@ object CloudStreamExtensionLoader {
                 }
             }
         } catch (e: Throwable) {
+        } finally {
+            Thread.currentThread().contextClassLoader = origCl
         }
     }
 }
