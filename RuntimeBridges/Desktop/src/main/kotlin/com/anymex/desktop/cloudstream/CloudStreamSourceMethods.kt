@@ -61,6 +61,13 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                 "hasNextPage" to res.hasNext  
             )
         } catch (e: Exception) {
+            if (provider.name.equals("Kisskh", ignoreCase = true)) {
+                val directList = searchKisskhDirect(query, page)
+                if (directList != null) {
+                    System.err.println("[CS-Methods] Kisskh direct search succeeded with ${directList.size} items")
+                    return mapOf("list" to directList, "hasNextPage" to false)
+                }
+            }
             System.err.println("[CS-Methods] ERROR: '${provider.name}' search failed: ${e.message}")
             e.printStackTrace()
             mapOf("list" to emptyList<Any>(), "hasNextPage" to false)
@@ -104,6 +111,14 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
             val direct = fetchCineTvDirect(vodId, audioType)
             if (direct != null) {
                 System.err.println("[CS-Methods] CineTv direct fetch succeeded with ${(direct["episodes"] as? List<*>)?.size ?: 0} episodes")
+                return direct
+            }
+        }
+
+        if (res == null && provider.name.equals("Kisskh", ignoreCase = true)) {
+            val direct = fetchKisskhDirect(url)
+            if (direct != null) {
+                System.err.println("[CS-Methods] Kisskh direct fetch succeeded with ${(direct["episodes"] as? List<*>)?.size ?: 0} episodes")
                 return direct
             }
         }
@@ -205,6 +220,14 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                         "headers" to mapOf("User-Agent" to "okhttp/4.11.0")
                     ))
                 }
+            }
+        }
+
+        if (provider.name.equals("Kisskh", ignoreCase = true)) {
+            val directLinks = fetchKisskhLinks(effectiveData)
+            if (directLinks.isNotEmpty()) {
+                System.err.println("[CS-Methods] Kisskh direct loadLinks resolved ${directLinks.size} links")
+                return directLinks
             }
         }
 
@@ -679,6 +702,152 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
             e.printStackTrace()
             return null
         }
+    }
+
+    private fun searchKisskhDirect(query: String, page: Int): List<Map<String, Any?>>? {
+        return try {
+            val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+            val url = "https://kisskh.is/api/DramaList/Search?q=$encoded&type=0"
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "https://kisskh.is")
+                .build()
+            val resp = app.baseClient.newCall(req).execute()
+            if (!resp.isSuccessful) return null
+            val text = resp.body?.string().orEmpty()
+            val arr = com.google.gson.JsonParser.parseString(text).asJsonArray
+            val list = mutableListOf<Map<String, Any?>>()
+            for (i in 0 until arr.size()) {
+                val item = arr.get(i).asJsonObject
+                val id = item.get("id")?.asInt ?: continue
+                val title = item.get("title")?.asString.orEmpty()
+                val thumb = item.get("thumbnail")?.asString
+                list.add(mapOf(
+                    "id" to id,
+                    "title" to title,
+                    "name" to title,
+                    "url" to "https://kisskh.is/Drama/$id",
+                    "cover" to thumb,
+                    "posterUrl" to thumb,
+                    "type" to 2, // TvSeries
+                    "apiName" to "Kisskh"
+                ))
+            }
+            list
+        } catch (e: Throwable) {
+            System.err.println("[CS-Methods] Kisskh direct search error: ${e.message}")
+            null
+        }
+    }
+
+    private fun fetchKisskhDirect(dramaUrl: String): Map<String, Any?>? {
+        return try {
+            val id = dramaUrl.substringAfterLast("/").substringBefore("?").substringBefore(",")
+            val url = "https://kisskh.is/api/DramaList/Drama/$id?isq=false"
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "https://kisskh.is")
+                .build()
+            val resp = app.baseClient.newCall(req).execute()
+            if (!resp.isSuccessful) return null
+            val text = resp.body?.string().orEmpty()
+            val json = com.google.gson.JsonParser.parseString(text).asJsonObject
+            val title = json.get("title")?.asString.orEmpty()
+            val thumb = json.get("thumbnail")?.asString
+            val desc = json.get("description")?.asString
+            val epArr = json.getAsJsonArray("episodes") ?: com.google.gson.JsonArray()
+
+            val epList = mutableListOf<Map<String, Any?>>()
+            for (i in 0 until epArr.size()) {
+                val epObj = epArr.get(i).asJsonObject
+                val epId = epObj.get("id")?.asInt ?: continue
+                val epNum = epObj.get("number")?.asDouble ?: (i + 1).toDouble()
+                epList.add(mapOf(
+                    "name" to "Episode ${epNum.toInt()}",
+                    "url" to epId.toString(),
+                    "data" to epId.toString(),
+                    "dataUrl" to epId.toString(),
+                    "episodeNumber" to epNum,
+                    "thumbnail" to thumb,
+                    "description" to null
+                ))
+            }
+
+            mapOf(
+                "title" to title,
+                "url" to dramaUrl,
+                "cover" to thumb,
+                "description" to desc,
+                "author" to null,
+                "artist" to null,
+                "genre" to emptyList<String>(),
+                "episodes" to epList
+            )
+        } catch (e: Throwable) {
+            System.err.println("[CS-Methods] Kisskh direct fetch error: ${e.message}")
+            null
+        }
+    }
+
+    private fun fetchKisskhLinks(data: String): List<Map<String, Any?>> {
+        val links = mutableListOf<Map<String, Any?>>()
+        try {
+            val epId = data.trim().substringAfterLast("/").substringBefore("?").substringBefore(",")
+            if (epId.isEmpty() || !epId.all { it.isDigit() }) return emptyList()
+
+            // Resolve streaming key from enc-dec.app
+            val encReq = okhttp3.Request.Builder()
+                .url("https://enc-dec.app/api/enc-kisskh?text=$epId&type=vid")
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            val encResp = app.baseClient.newCall(encReq).execute()
+            if (!encResp.isSuccessful) return emptyList()
+            val encText = encResp.body?.string().orEmpty()
+            val encJson = com.google.gson.JsonParser.parseString(encText).asJsonObject
+            val kkey = encJson.get("result")?.asString.orEmpty()
+            if (kkey.isEmpty()) return emptyList()
+
+            // Resolve sources from kisskh.is
+            val streamUrl = "https://kisskh.is/api/DramaList/Episode/$epId.png?err=false&ts=&time=&kkey=$kkey"
+            val streamReq = okhttp3.Request.Builder()
+                .url(streamUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Referer", "https://kisskh.is")
+                .build()
+            val streamResp = app.baseClient.newCall(streamReq).execute()
+            if (!streamResp.isSuccessful) return emptyList()
+            val streamText = streamResp.body?.string().orEmpty()
+            val streamJson = com.google.gson.JsonParser.parseString(streamText).asJsonObject
+
+            val video = streamJson.get("Video")?.asString.orEmpty()
+            val thirdParty = streamJson.get("ThirdParty")?.asString.orEmpty()
+
+            if (video.isNotEmpty() && video.startsWith("http")) {
+                links.add(mapOf(
+                    "url" to video,
+                    "name" to "KissKH HLS",
+                    "quality" to "1080p",
+                    "isM3u8" to true,
+                    "isDash" to false,
+                    "headers" to mapOf("User-Agent" to "Mozilla/5.0", "Referer" to "https://kisskh.is")
+                ))
+            }
+            if (thirdParty.isNotEmpty() && thirdParty.startsWith("http")) {
+                links.add(mapOf(
+                    "url" to thirdParty,
+                    "name" to "KissKH ThirdParty",
+                    "quality" to "720p",
+                    "isM3u8" to thirdParty.contains(".m3u8"),
+                    "isDash" to false,
+                    "headers" to mapOf("User-Agent" to "Mozilla/5.0", "Referer" to "https://kisskh.is")
+                ))
+            }
+        } catch (e: Throwable) {
+            System.err.println("[CS-Methods] Kisskh direct loadLinks error: ${e.message}")
+        }
+        return links
     }
 
     companion object {
