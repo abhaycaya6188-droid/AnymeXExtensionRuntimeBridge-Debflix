@@ -61,6 +61,7 @@ object CloudStreamExtensionLoader {
                 explicitNulls = false
             }
         }
+        System.setProperty("anymex.ua.movielinkbd.li", "Mozilla/5.0")
         initialized = true
         System.err.println("CloudStream Runtime initialized!")
     }

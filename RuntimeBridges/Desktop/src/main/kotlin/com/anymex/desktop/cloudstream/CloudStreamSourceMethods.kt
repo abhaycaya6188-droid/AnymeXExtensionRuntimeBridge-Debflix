@@ -134,6 +134,17 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
             else -> emptyList()
         }
 
+        if (episodes.isEmpty() && provider.name.equals("CineTv", ignoreCase = true)) {
+            val clean = normalizedUrl.substringAfterLast("/")
+            val vodId = clean.substringBefore(",")
+            val audioType = clean.substringAfter(",", "1").toIntOrNull() ?: 1
+            val direct = fetchCineTvDirect(vodId, audioType)
+            if (direct != null) {
+                System.err.println("[CS-Methods] CineTv direct fetch fallback succeeded with ${(direct["episodes"] as? List<*>)?.size ?: 0} episodes")
+                return direct
+            }
+        }
+
         val topLevel = mapOf(
             "title" to res.name,                
             "url" to res.url,
