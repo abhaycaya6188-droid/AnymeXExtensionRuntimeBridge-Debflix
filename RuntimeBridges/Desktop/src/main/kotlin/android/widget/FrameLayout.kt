@@ -5,11 +5,11 @@ import android.view.ViewGroup
 
 open class FrameLayout(context: Context? = null) : ViewGroup(context) {
     open class LayoutParams : ViewGroup.LayoutParams {
-        var gravity: Int = 0
-        var leftMargin: Int = 0
-        var topMargin: Int = 0
-        var rightMargin: Int = 0
-        var bottomMargin: Int = 0
+        @JvmField var gravity: Int = 0
+        @JvmField var leftMargin: Int = 0
+        @JvmField var topMargin: Int = 0
+        @JvmField var rightMargin: Int = 0
+        @JvmField var bottomMargin: Int = 0
 
         constructor(width: Int, height: Int) : super(width, height)
         constructor(width: Int, height: Int, gravity: Int) : super(width, height) {

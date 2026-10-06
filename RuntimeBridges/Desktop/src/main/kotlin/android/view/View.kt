@@ -12,13 +12,13 @@ open class View(val context: Context? = null) {
         fun onKey(v: View, keyCode: Int, event: KeyEvent): Boolean
     }
 
-    var visibility: Int = 0
-    var alpha: Float = 1.0f
-    var translationX: Float = 0f
-    var translationY: Float = 0f
-    var scaleX: Float = 1.0f
-    var scaleY: Float = 1.0f
-    var elevation: Float = 0f
+    @JvmField var visibility: Int = 0
+    @JvmField var alpha: Float = 1.0f
+    @JvmField var translationX: Float = 0f
+    @JvmField var translationY: Float = 0f
+    @JvmField var scaleX: Float = 1.0f
+    @JvmField var scaleY: Float = 1.0f
+    @JvmField var elevation: Float = 0f
 
     open fun setBackground(drawable: Drawable?) {}
     open fun setBackgroundColor(color: Int) {}
