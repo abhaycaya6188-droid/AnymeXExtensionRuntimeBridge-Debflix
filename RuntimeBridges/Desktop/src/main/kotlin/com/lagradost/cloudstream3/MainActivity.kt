@@ -32,6 +32,10 @@ val app: Requests by lazy {
     }
     
     val client = OkHttpClient.Builder()
+        .dns { hostname ->
+            val all = okhttp3.Dns.SYSTEM.lookup(hostname)
+            all.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+        }
         .addInterceptor(logging)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

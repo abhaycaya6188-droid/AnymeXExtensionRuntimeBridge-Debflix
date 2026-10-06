@@ -63,7 +63,21 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
     }
 
     suspend fun getDetails(url: String): Map<String, Any?> {
-        val res = provider.load(url) ?: return mapOf(
+        System.err.println("[CS-Methods] getDetails called for '${provider.name}' with url='$url'")
+        val normalizedUrl = if (provider.name.equals("CineTv", ignoreCase = true) && !url.contains(",")) "$url,1" else url
+        val res = try {
+            val r = provider.load(normalizedUrl)
+            if (r == null) {
+                System.err.println("[CS-Methods] WARNING: '${provider.name}' provider.load returned null for '$normalizedUrl'")
+            } else {
+                System.err.println("[CS-Methods] '${provider.name}' provider.load succeeded: ${r.name}")
+            }
+            r
+        } catch (e: Throwable) {
+            System.err.println("[CS-Methods] ERROR: '${provider.name}' provider.load threw: ${e.message}")
+            e.printStackTrace()
+            null
+        } ?: return mapOf(
             "title" to null, "url" to url, "cover" to null,
             "description" to null, "episodes" to emptyList<Any>()
         )
@@ -109,9 +123,15 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
     }
 
     suspend fun loadLinks(data: String): List<Map<String, Any?>> {
-        Log.d(TAG, "loadLinks called with data: $data")
-        if (isInvalidData(data)) {
-            Log.w(TAG, "isInvalidData returned true for: $data")
+        System.err.println("[CS-Methods] loadLinks called for '${provider.name}' with data='$data'")
+        val effectiveData = if (provider.name.equals("CineTv", ignoreCase = true) && !data.contains("|")) {
+            val clean = data.substringAfterLast("/")
+            if (clean.contains(",")) clean.replace(",", "|") else "$clean|1"
+        } else {
+            data
+        }
+        if (isInvalidData(effectiveData)) {
+            Log.w(TAG, "isInvalidData returned true for: $effectiveData")
             return emptyList()
         }
         val links = java.util.concurrent.CopyOnWriteArrayList<Map<String, Any?>>()
@@ -119,7 +139,7 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
 
         try {
             provider.loadLinks(
-                data,
+                effectiveData,
                 false,
                 { subtitle ->
                     try {

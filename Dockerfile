@@ -10,6 +10,6 @@ RUN mkdir -p /app/cs-extensions
 COPY extensions/ /app/cs-extensions/
 ENV CS_EXTENSIONS_DIR="/app/cs-extensions"
 ENV CS_ALLOWED_SOURCE_IDS="cs_debflixtest,cs_rtally,cs_movielinkbd,cs_cinetv,cs_castletvusevlc,cs_moviesmod,cs_topmovies"
-ENV JAVA_TOOL_OPTIONS="-Xms64m -Xmx384m -XX:+UseSerialGC"
+ENV JAVA_TOOL_OPTIONS="-Xms64m -Xmx384m -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true"
 EXPOSE 8080
 CMD ["java","-cp","/app/desktop_bridge.jar","com.anymex.desktop.RailwayHealthServerKt"]
