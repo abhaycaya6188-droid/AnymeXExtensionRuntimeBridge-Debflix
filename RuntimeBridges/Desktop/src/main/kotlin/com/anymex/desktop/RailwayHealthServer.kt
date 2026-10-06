@@ -52,16 +52,27 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
             if (body.length > 64 * 1024) return json(Response.Status.BAD_REQUEST, mapOf("error" to "request_too_large"))
             val req = gson.fromJson(body, JsonObject::class.java)
             val method = req.get("method")?.asString.orEmpty()
-            val args = req.getAsJsonObject("args") ?: JsonObject()
-            val sourceId = args.get("sourceId")?.asString.orEmpty()
+            val argsElem = req.get("args")
+            val argsObj = if (argsElem != null && argsElem.isJsonObject) argsElem.asJsonObject else null
+            val argsArr = if (argsElem != null && argsElem.isJsonArray) argsElem.asJsonArray else null
+
+            val sourceId = argsObj?.get("sourceId")?.asString 
+                ?: (if (argsArr != null && argsArr.size() > 0) argsArr.get(0).asString else "")
+            val query = argsObj?.get("query")?.asString 
+                ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
+            val page = argsObj?.get("page")?.asInt 
+                ?: (if (argsArr != null && argsArr.size() > 2) argsArr.get(2).asInt else 1)
+            val url = argsObj?.get("url")?.asString 
+                ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
+
             if (method !in allowedMethods) return json(Response.Status.FORBIDDEN, mapOf("error" to "method_not_allowed"))
             if (sourceId !in allowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
 
             val data = runBlocking {
                 when (method) {
-                    "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, args.get("query")?.asString.orEmpty(), args.get("page")?.asInt ?: 1)
-                    "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, args.get("url")?.asString.orEmpty())
-                    "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, args.get("url")?.asString.orEmpty())
+                    "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, query, page)
+                    "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, url)
+                    "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, url)
                     else -> "{}"
                 }
             }

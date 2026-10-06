@@ -69,6 +69,10 @@ public class Context {
         return "";
     }
 
+    public android.content.res.Resources getResources() {
+        return new android.content.res.Resources();
+    }
+
     public java.io.InputStream openFileInput(String name) throws java.io.FileNotFoundException {
         return new java.io.FileInputStream(new File(getFilesDir(), name));
     }
