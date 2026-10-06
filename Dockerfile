@@ -3,7 +3,6 @@ WORKDIR /app
 COPY prebuilt/desktop_bridge.jar /app/desktop_bridge.jar
 RUN mkdir -p /app/cs-extensions
 COPY extensions/ /app/cs-extensions/
-ADD https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/builds/KisskhProvider.cs3 /app/cs-extensions/KisskhProvider.jar
 RUN mkdir -p /root/Documents/AnymeX/ExtensionSettings && \
     echo '{"movielinkbd_main_url":"https://h3k2ns.movielinkbd.li"}' > /root/Documents/AnymeX/ExtensionSettings/com.lagradost.cloudstream3.json
 ENV CS_EXTENSIONS_DIR="/app/cs-extensions"
