@@ -16,7 +16,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
     private val allowedSources = System.getenv("CS_ALLOWED_SOURCE_IDS")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
-    private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList")
+    private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList", "csGetVideoListStream")
     private data class RpcJob(
         @Volatile var status: String = "pending",
         @Volatile var data: Any? = null,
@@ -40,6 +40,15 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, query, page)
                 "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, url)
                 "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, url)
+                "csGetVideoListStream" -> {
+                    val links = java.util.Collections.synchronizedList(mutableListOf<Any?>())
+                    com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoListStream(sourceId, url) { linkJson ->
+                        try {
+                            links.add(gson.fromJson(linkJson, Any::class.java))
+                        } catch (_: Throwable) {}
+                    }
+                    links.toList()
+                }
                 else -> "{}"
             }
         }
