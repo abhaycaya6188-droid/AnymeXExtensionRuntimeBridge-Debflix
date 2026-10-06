@@ -35,20 +35,23 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     }
 
     private fun executeRpc(method: String, sourceId: String, query: String, page: Int, url: String): Any? {
-        val raw = runBlocking {
+        if (method == "csGetVideoListStream") {
+            val links = java.util.Collections.synchronizedList(mutableListOf<Any?>())
+            runBlocking {
+                com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoListStream(sourceId, url) { linkJson ->
+                    try {
+                        links.add(gson.fromJson(linkJson, Any::class.java))
+                    } catch (_: Throwable) {}
+                }
+            }
+            return links.toList()
+        }
+
+        val raw: String = runBlocking {
             when (method) {
                 "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, query, page)
                 "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, url)
                 "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, url)
-                "csGetVideoListStream" -> {
-                    val links = java.util.Collections.synchronizedList(mutableListOf<Any?>())
-                    com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoListStream(sourceId, url) { linkJson ->
-                        try {
-                            links.add(gson.fromJson(linkJson, Any::class.java))
-                        } catch (_: Throwable) {}
-                    }
-                    links.toList()
-                }
                 else -> "{}"
             }
         }
