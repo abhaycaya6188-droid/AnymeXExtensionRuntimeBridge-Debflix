@@ -36,6 +36,18 @@ jobs:
           name: anymex-desktop-runtime-debflix
           path: RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
           if-no-files-found: error
+      - name: Refresh Railway prebuilt runtime
+        run: |
+          cp RuntimeBridges/Desktop/build/libs/desktop_bridge.jar prebuilt/desktop_bridge.jar
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prebuilt/desktop_bridge.jar
+          if git diff --cached --quiet; then
+            echo "Prebuilt runtime already current"
+          else
+            git commit -m "build(runtime): refresh Railway desktop bridge"
+            git push origin HEAD:main
+          fi
       - name: Publish immutable runtime release
         env:
           GH_TOKEN: ${{ github.token }}
