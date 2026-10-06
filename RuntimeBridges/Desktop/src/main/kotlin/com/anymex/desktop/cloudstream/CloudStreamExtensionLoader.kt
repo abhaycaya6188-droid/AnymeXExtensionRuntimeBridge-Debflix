@@ -35,11 +35,14 @@ object CloudStreamExtensionLoader {
     @Volatile private var cineStreamDiagnostic = "provider-order: unavailable"
     @Volatile private var cineStreamClassLoader: ClassLoader? = null
     @Volatile private var fibwatchAvailable = false
+    @Volatile private var skymoviesAvailable = false
 
     fun getCineStreamDiagnostic(): Map<String, Any?> = mapOf(
         "summary" to cineStreamDiagnostic,
         "fibwatchAvailable" to fibwatchAvailable,
         "fibwatchProviderKey" to if (fibwatchAvailable) "p_fibwatch" else null,
+        "skymoviesAvailable" to skymoviesAvailable,
+        "skymoviesProviderKey" to if (skymoviesAvailable) "p_skymovies" else null,
     )
 
     fun initialize() {
@@ -195,6 +198,15 @@ object CloudStreamExtensionLoader {
                     val cause = diag.cause ?: diag
                     System.err.println("  [CS-CineStream] p_fibwatch registry check failed: ${cause.javaClass.simpleName}: ${cause.message}")
                 }
+                try {
+                    val provider = findCineStreamProvider(pluginClass.classLoader, "p_skymovies")
+                    skymoviesAvailable = provider != null
+                    System.err.println("  [CS-CineStream] p_skymovies registry entry present=$skymoviesAvailable")
+                } catch (diag: Throwable) {
+                    skymoviesAvailable = false
+                    val cause = diag.cause ?: diag
+                    System.err.println("  [CS-CineStream] p_skymovies registry check failed: ${cause.javaClass.simpleName}: ${cause.message}")
+                }
             }
             val postApis = com.lagradost.cloudstream3.APIHolder.apis.toList()
             val newApis = postApis.filter { it !in preApis }
@@ -271,8 +283,8 @@ object CloudStreamExtensionLoader {
         tmdbId: Int?,
         onLinkFound: (String) -> Unit,
     ) = withContext(Dispatchers.IO) {
-        require(providerKey == "p_fibwatch") { "Only p_fibwatch is exposed by this RPC" }
-        require(sourceId == "debflix-fibwatch") { "Invalid CineStream internal provider sourceId" }
+        require(providerKey == "p_fibwatch" || providerKey == "p_skymovies") { "Only p_fibwatch and p_skymovies are exposed by this RPC" }
+        require(sourceId == "debflix-fibwatch" || sourceId == "debflix-skymovies") { "Invalid CineStream internal provider sourceId" }
         require(title.isNotBlank()) { "title is required" }
 
         val loader = cineStreamClassLoader ?: error("CineStream plugin classloader is not loaded")
