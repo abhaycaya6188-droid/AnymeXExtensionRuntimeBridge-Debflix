@@ -40,6 +40,11 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
 
     suspend fun search(query: String, page: Int): Map<String, Any?> {
         System.err.println("[CS-Methods] Searching on '${provider.name}' for '$query' (page $page)...")
+        try {
+            com.lagradost.cloudstream3.APIHolder.mapper.setTypeFactory(
+                com.lagradost.cloudstream3.APIHolder.mapper.typeFactory.withClassLoader(provider.javaClass.classLoader)
+            )
+        } catch (_: Throwable) {}
         return try {
             val res = provider.search(query, page)
             if (res == null) {
@@ -569,12 +574,16 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                     .post(initBody)
                     .build()
                 val initResp = app.baseClient.newCall(initReq).execute()
+                System.err.println("[CS-Methods] CineTv init status: ${initResp.code}")
                 if (initResp.isSuccessful) {
                     val bodyStr = initResp.body?.string().orEmpty()
                     val dec = aesDecryptCineTv(bodyStr)
                     val json = com.google.gson.JsonParser.parseString(dec).asJsonObject
                     token = json.getAsJsonObject("result")?.getAsJsonObject("user_info")?.get("token")?.asString.orEmpty()
+                    System.err.println("[CS-Methods] CineTv got token: ${token?.take(15)}...")
                     if (!token.isNullOrEmpty()) cineTvTokenCache = token
+                } else {
+                    System.err.println("[CS-Methods] CineTv init failed with HTTP ${initResp.code}")
                 }
             }
 
@@ -620,11 +629,19 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                 .post(formBody)
                 .build()
             val resp = app.baseClient.newCall(req).execute()
-            if (!resp.isSuccessful) return null
+            System.err.println("[CS-Methods] CineTv vod status: ${resp.code}")
+            if (!resp.isSuccessful) {
+                System.err.println("[CS-Methods] CineTv vod request HTTP failed: ${resp.code}")
+                return null
+            }
             val bodyStr = resp.body?.string().orEmpty()
             val dec = aesDecryptCineTv(bodyStr)
             val json = com.google.gson.JsonParser.parseString(dec).asJsonObject
-            val result = json.getAsJsonObject("result") ?: return null
+            val result = json.getAsJsonObject("result")
+            if (result == null) {
+                System.err.println("[CS-Methods] CineTv vod result object null, code: ${json.get("code")?.asString}, msg: ${json.get("message")?.asString}")
+                return null
+            }
             val title = result.get("vod_name")?.asString.orEmpty()
             val pic = result.get("vod_pic")?.asString.orEmpty()
             val plot = result.get("vod_blurb")?.asString.orEmpty()
