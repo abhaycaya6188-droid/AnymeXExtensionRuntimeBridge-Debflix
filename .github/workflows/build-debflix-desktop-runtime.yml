@@ -25,7 +25,15 @@ jobs:
           gradle-version: '8.10.2'
       - name: Build patched desktop bridge
         working-directory: RuntimeBridges/Desktop
-        run: gradle shadowJar --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle shadowJar --no-daemon 2>&1 | tee /tmp/gradle.log || {
+            echo "## Gradle Build Failure" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 100 /tmp/gradle.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: anymex-desktop-runtime-debflix
