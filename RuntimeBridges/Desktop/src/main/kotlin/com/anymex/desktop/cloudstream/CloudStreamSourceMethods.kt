@@ -557,7 +557,7 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                     .apply { initHeaders.forEach { (k, v) -> addHeader(k, v) } }
                     .post(initBody)
                     .build()
-                val initResp = com.lagradost.cloudstream3.MainActivityKt.app.baseClient.newCall(initReq).execute()
+                val initResp = app.baseClient.newCall(initReq).execute()
                 if (initResp.isSuccessful) {
                     val bodyStr = initResp.body?.string().orEmpty()
                     val dec = aesDecryptCineTv(bodyStr)
@@ -608,7 +608,7 @@ class CloudStreamSourceMethods(val provider: MainAPI) {
                 .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
                 .post(formBody)
                 .build()
-            val resp = com.lagradost.cloudstream3.MainActivityKt.app.baseClient.newCall(req).execute()
+            val resp = app.baseClient.newCall(req).execute()
             if (!resp.isSuccessful) return null
             val bodyStr = resp.body?.string().orEmpty()
             val dec = aesDecryptCineTv(bodyStr)
