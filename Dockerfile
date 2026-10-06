@@ -1,11 +1,6 @@
-FROM gradle:8.10-jdk17 AS build
-WORKDIR /src
-COPY . .
-RUN cd RuntimeBridges/Desktop && gradle shadowJar --no-daemon
-
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /src/RuntimeBridges/Desktop/build/libs/desktop_bridge*.jar /app/desktop_bridge.jar
+COPY prebuilt/desktop_bridge.jar /app/desktop_bridge.jar
 RUN mkdir -p /app/cs-extensions
 COPY extensions/ /app/cs-extensions/
 RUN mkdir -p /root/Documents/AnymeX/ExtensionSettings && \
