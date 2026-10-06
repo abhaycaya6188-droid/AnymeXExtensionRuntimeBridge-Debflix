@@ -5,6 +5,10 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import kotlinx.coroutines.runBlocking
 
+object DiagnosticsLog {
+    val logs = java.util.concurrent.CopyOnWriteArrayList<String>()
+}
+
 class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
@@ -31,7 +35,8 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "ok" to true,
                 "count" to loaded.size,
                 "providers" to loaded,
-                "allowedSources" to allowedSources.toList().sorted()
+                "allowedSources" to allowedSources.toList().sorted(),
+                "logs" to DiagnosticsLog.logs.takeLast(100)
             ))
         }
         if (session.uri != "/rpc" || session.method != Method.POST) return json(Response.Status.NOT_FOUND, mapOf("error" to "not_found"))
@@ -69,6 +74,26 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
 }
 
 fun main() {
+    val origErr = System.err
+    try {
+        System.setErr(object : java.io.PrintStream(origErr) {
+            override fun println(x: String?) {
+                origErr.println(x)
+                if (x != null) {
+                    if (DiagnosticsLog.logs.size > 250) DiagnosticsLog.logs.removeAt(0)
+                    DiagnosticsLog.logs.add(x)
+                }
+            }
+            override fun print(x: String?) {
+                origErr.print(x)
+                if (x != null) {
+                    if (DiagnosticsLog.logs.size > 250) DiagnosticsLog.logs.removeAt(0)
+                    DiagnosticsLog.logs.add(x)
+                }
+            }
+        })
+    } catch (_: Exception) {}
+
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     RailwayHealthServer(port).apply {
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
