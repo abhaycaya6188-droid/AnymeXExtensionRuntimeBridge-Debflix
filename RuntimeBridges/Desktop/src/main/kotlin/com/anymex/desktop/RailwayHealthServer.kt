@@ -16,7 +16,8 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
     private val allowedSources = System.getenv("CS_ALLOWED_SOURCE_IDS")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
-    private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList", "csGetVideoListStream")
+    private val effectiveAllowedSources = allowedSources + "debflix-skymovies"
+    private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList", "csGetVideoListStream", "csCineStreamProviderLinks")
     private data class RpcJob(
         @Volatile var status: String = "pending",
         @Volatile var data: Any? = null,
@@ -34,11 +35,41 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
         rpcJobs.entries.removeIf { it.value.createdAt < cutoff }
     }
 
-    private fun executeRpc(method: String, sourceId: String, query: String, page: Int, url: String): Any? {
+    private fun executeRpc(method: String, sourceId: String, query: String, page: Int, url: String, args: JsonObject?): Any? {
         if (method == "csGetVideoListStream") {
             val links = java.util.Collections.synchronizedList(mutableListOf<Any?>())
             runBlocking {
                 com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoListStream(sourceId, url) { linkJson ->
+                    try {
+                        links.add(gson.fromJson(linkJson, Any::class.java))
+                    } catch (_: Throwable) {}
+                }
+            }
+            return links.toList()
+        }
+        if (method == "csCineStreamProviderLinks") {
+            val providerKey = args?.get("providerKey")?.asString.orEmpty()
+            require(sourceId == "debflix-skymovies" && providerKey == "p_skymovies") {
+                "Only the SkyMovies provider is exposed by this RPC"
+            }
+            val title = args?.get("title")?.asString.orEmpty()
+            val year = args?.get("year")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
+            val season = args?.get("season")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
+            val episode = args?.get("episode")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
+            val imdbId = args?.get("imdbId")?.takeIf { !it.isJsonNull }?.asString?.takeIf { it.isNotBlank() }
+            val tmdbId = args?.get("tmdbId")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
+            val links = java.util.Collections.synchronizedList(mutableListOf<Any?>())
+            runBlocking {
+                com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchCineStreamProviderLinks(
+                    sourceId = sourceId,
+                    providerKey = providerKey,
+                    title = title,
+                    year = year,
+                    season = season,
+                    episode = episode,
+                    imdbId = imdbId,
+                    tmdbId = tmdbId,
+                ) { linkJson ->
                     try {
                         links.add(gson.fromJson(linkJson, Any::class.java))
                     } catch (_: Throwable) {}
@@ -78,7 +109,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "ok" to true,
                 "count" to loaded.size,
                 "providers" to loaded,
-                "allowedSources" to allowedSources.toList().sorted(),
+                "allowedSources" to effectiveAllowedSources.toList().sorted(),
                 "startupLogs" to DiagnosticsLog.startupLogs.take(150),
                 "logs" to DiagnosticsLog.logs.takeLast(100)
             ))
@@ -122,14 +153,14 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 val url = argsObj?.get("url")?.asString
                     ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
                 if (method !in allowedMethods) return json(Response.Status.FORBIDDEN, mapOf("error" to "method_not_allowed"))
-                if (sourceId !in allowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
+                if (sourceId !in effectiveAllowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
                 cleanupJobs()
                 val id = UUID.randomUUID().toString()
                 val job = RpcJob()
                 rpcJobs[id] = job
                 Thread {
                     try {
-                        job.data = executeRpc(method, sourceId, query, page, url)
+                        job.data = executeRpc(method, sourceId, query, page, url, argsObj)
                         job.status = "done"
                     } catch (ex: Exception) {
                         System.err.println("[HTTP-RPC-ASYNC] " + ex.javaClass.simpleName + ": " + ex.message)
@@ -173,17 +204,10 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
 
             if (method !in allowedMethods) return json(Response.Status.FORBIDDEN, mapOf("error" to "method_not_allowed"))
-            if (sourceId !in allowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
+            if (sourceId !in effectiveAllowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
 
-            val data = runBlocking {
-                when (method) {
-                    "csSearch" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.search(sourceId, query, page)
-                    "csGetDetail" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchDetails(sourceId, url)
-                    "csGetVideoList" -> com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.fetchVideoList(sourceId, url)
-                    else -> "{}"
-                }
-            }
-            json(Response.Status.OK, mapOf("ok" to true, "data" to gson.fromJson(data, Any::class.java)))
+            val data = executeRpc(method, sourceId, query, page, url, argsObj)
+            json(Response.Status.OK, mapOf("ok" to true, "data" to data))
         } catch (ex: Exception) {
             System.err.println("[HTTP-RPC] " + ex.javaClass.simpleName + ": " + ex.message)
             json(Response.Status.INTERNAL_ERROR, mapOf("error" to "rpc_failed"))
