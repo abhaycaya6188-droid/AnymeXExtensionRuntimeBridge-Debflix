@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY prebuilt/desktop_bridge.jar /app/desktop_bridge.jar
