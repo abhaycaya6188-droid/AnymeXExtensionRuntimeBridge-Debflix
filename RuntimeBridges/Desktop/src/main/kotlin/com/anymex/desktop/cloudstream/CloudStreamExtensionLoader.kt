@@ -76,8 +76,8 @@ object CloudStreamExtensionLoader {
 
         val jsonArray = com.google.gson.JsonArray()
 
-        folder.listFiles { file -> file.extension == "jar" }?.forEach { jar ->
-            System.err.println("[CS] Scanning: ${jar.name}")
+        folder.listFiles { file -> file.extension.lowercase() in setOf("jar", "cs3") }?.forEach { jar ->
+            System.err.println("[CS] Scanning: ${jar.name} (${jar.extension.lowercase()})")
             
             val jarProcessThread = Thread {
                 try {
