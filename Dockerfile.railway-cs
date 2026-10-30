@@ -3,10 +3,12 @@ WORKDIR /app
 COPY prebuilt/desktop_bridge.jar /app/desktop_bridge.jar
 RUN mkdir -p /app/cs-extensions
 COPY extensions/ /app/cs-extensions/
+# Pin the known-good CineStream build used by the SkyMovies/FibWatch providers.
+ADD --checksum=sha256:30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b https://raw.githubusercontent.com/SaurabhKaperwan/CSX/923c5c05a07ea2fb70ae25530d068bf1fbd4da9f/CineStream.cs3 /app/cs-extensions/cinestream-support.cs3
 RUN mkdir -p /root/Documents/AnymeX/ExtensionSettings && \
     echo '{"movielinkbd_main_url":"https://h3k2ns.movielinkbd.li"}' > /root/Documents/AnymeX/ExtensionSettings/com.lagradost.cloudstream3.json
 ENV CS_EXTENSIONS_DIR="/app/cs-extensions"
-ENV CS_ALLOWED_SOURCE_IDS="cs_debflixtest,cs_rtally,cs_movielinkbd,cs_cinetv,cs_castletvusevlc,cs_moviesmod,cs_topmovies,cs_kisskh"
+ENV CS_ALLOWED_SOURCE_IDS="cs_debflixtest,cs_rtally,cs_movielinkbd,cs_cinetv,cs_castletvusevlc,cs_moviesmod,cs_topmovies,cs_kisskh,debflix-skymovies,debflix-fibwatch"
 ENV JAVA_TOOL_OPTIONS="-Xms64m -Xmx384m -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true"
 EXPOSE 8080
 CMD ["java","-cp","/app/desktop_bridge.jar","com.anymex.desktop.RailwayHealthServerKt"]
