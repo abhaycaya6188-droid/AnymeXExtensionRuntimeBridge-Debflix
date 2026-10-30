@@ -1,0 +1,94 @@
+name: Validate Railway SkyMovies CineStream runtime
+
+on:
+  push:
+    branches:
+      - fix/railway-skymovies-cinestream-runtime
+    paths:
+      - 'RuntimeBridges/Desktop/**'
+      - 'Dockerfile'
+      - 'Dockerfile.railway-cs'
+      - '.github/workflows/validate-skymovies-cinestream-runtime.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'RuntimeBridges/Desktop/**'
+      - 'Dockerfile'
+      - 'Dockerfile.railway-cs'
+      - '.github/workflows/validate-skymovies-cinestream-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runtime
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build desktop CloudStream bridge
+        working-directory: RuntimeBridges/Desktop
+        run: gradle shadowJar --no-daemon
+
+      - name: Prepare Railway runtime jar
+        run: |
+          set -euo pipefail
+          test -s RuntimeBridges/Desktop/build/libs/desktop_bridge.jar
+          cp RuntimeBridges/Desktop/build/libs/desktop_bridge.jar prebuilt/desktop_bridge.jar
+
+      - name: Build Railway image with pinned CineStream package
+        run: docker build --pull -f Dockerfile -t debflix-cs-skymovies:ci .
+
+      - name: Start Railway runtime
+        run: |
+          docker run -d --name debflix-cs-skymovies-ci \
+            -p 8080:8080 \
+            -e CS_BRIDGE_TOKEN=ci-smoke-token \
+            -e CS_ALLOWED_SOURCE_IDS=cs_debflixtest,debflix-skymovies,debflix-fibwatch \
+            debflix-cs-skymovies:ci
+
+      - name: Verify CineStream and SkyMovies registry load
+        run: |
+          set -euo pipefail
+          ok=false
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 5 http://127.0.0.1:8080/health > /tmp/cs-health.json; then
+              echo "Health attempt $attempt:"
+              cat /tmp/cs-health.json
+            fi
+            if curl -fsS --max-time 5 http://127.0.0.1:8080/diagnostics > /tmp/cs-diagnostics.json; then
+              cat /tmp/cs-diagnostics.json | jq '.cineStream'
+              if jq -e '.cineStream.skymoviesAvailable == true' /tmp/cs-diagnostics.json >/dev/null; then
+                ok=true
+                break
+              fi
+            fi
+            sleep 2
+          done
+          if [ "$ok" != true ]; then
+            echo "::error::CineStream loaded but p_skymovies was not registered in the Railway runtime."
+            docker logs debflix-cs-skymovies-ci
+            exit 1
+          fi
+          echo "SkyMovies p_skymovies registry entry is available in the Railway runtime."
+
+      - name: Inspect runtime logs on failure
+        if: failure()
+        run: docker logs debflix-cs-skymovies-ci || true
+
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f debflix-cs-skymovies-ci || true
