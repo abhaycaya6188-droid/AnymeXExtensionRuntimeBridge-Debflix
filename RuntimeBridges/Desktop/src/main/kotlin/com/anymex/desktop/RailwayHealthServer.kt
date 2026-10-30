@@ -109,6 +109,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "ok" to true,
                 "count" to loaded.size,
                 "providers" to loaded,
+                "cineStream" to com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.getCineStreamDiagnostic(),
                 "allowedSources" to effectiveAllowedSources.toList().sorted(),
                 "startupLogs" to DiagnosticsLog.startupLogs.take(150),
                 "logs" to DiagnosticsLog.logs.takeLast(100)
