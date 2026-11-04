@@ -226,7 +226,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
 
             if (method !in allowedMethods) return json(Response.Status.FORBIDDEN, mapOf("error" to "method_not_allowed"))
-            if (sourceId !in effectiveAllowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
+            if (sourceId !in effectiveAllowedSources && sourceId !in com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.keys) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
 
             val data = executeRpc(method, sourceId, query, page, url, argsObj)
             json(Response.Status.OK, mapOf("ok" to true, "data" to data))
