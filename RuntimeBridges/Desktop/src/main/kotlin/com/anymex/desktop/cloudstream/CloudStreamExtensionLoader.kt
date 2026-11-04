@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.utils.DataStore
 import java.io.File
 import java.net.URLClassLoader
 import java.net.InetAddress
-import java.net.URL
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.util.zip.ZipFile
 
 import android.app.Application
@@ -57,7 +57,7 @@ object CloudStreamExtensionLoader {
                 val bootstrap = okhttp3.OkHttpClient.Builder().build()
                 val doh = okhttp3.dnsoverhttps.DnsOverHttps.Builder()
                     .client(bootstrap)
-                    .url(URL("https://cloudflare-dns.com/dns-query"))
+                    .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
                     .bootstrapDnsHosts(InetAddress.getByName("1.1.1.1"), InetAddress.getByName("1.0.0.1"))
                     .build()
                 current.newBuilder().dns(doh).build()
