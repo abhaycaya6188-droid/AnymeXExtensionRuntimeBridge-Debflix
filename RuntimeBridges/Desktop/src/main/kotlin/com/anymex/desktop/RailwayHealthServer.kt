@@ -117,7 +117,8 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 session.parseBody(files)
                 val body = gson.fromJson(files["postData"].orEmpty(), JsonObject::class.java)
                 val enabled = body?.get("enabled")?.asBoolean ?: false
-                val result = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.setDnsEnabled(enabled)
+                val provider = body?.get("provider")?.takeIf { !it.isJsonNull }?.asString ?: "Cloudflare"
+                val result = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.setDnsEnabled(enabled, provider)
                 json(if (result["ok"] == true) Response.Status.OK else Response.Status.INTERNAL_ERROR, result)
             } catch (ex: Exception) {
                 json(Response.Status.BAD_REQUEST, mapOf("ok" to false, "error" to "invalid_dns_settings"))
