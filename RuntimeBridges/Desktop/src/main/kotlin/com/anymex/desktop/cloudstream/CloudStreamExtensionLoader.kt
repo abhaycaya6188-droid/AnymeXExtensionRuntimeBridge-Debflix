@@ -7,6 +7,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.DataStore
 import java.io.File
 import java.net.URLClassLoader
+import java.net.InetAddress
+import java.net.URL
 import java.util.zip.ZipFile
 
 import android.app.Application
@@ -36,6 +38,40 @@ object CloudStreamExtensionLoader {
     @Volatile private var cineStreamClassLoader: ClassLoader? = null
     @Volatile private var fibwatchAvailable = false
     @Volatile private var skymoviesAvailable = false
+    @Volatile private var dnsEnabled = false
+    @Volatile private var networkHelper: NetworkHelper? = null
+
+    fun dnsStatus(): Map<String, Any?> = mapOf("ok" to true, "enabled" to dnsEnabled, "provider" to "Cloudflare", "scope" to "CloudStream NetworkHelper")
+
+    @Synchronized
+    fun setDnsEnabled(enabled: Boolean): Map<String, Any?> {
+        return try {
+            val helper = networkHelper ?: NetworkHelper(Injekt.get<Application>()).also { networkHelper = it }
+            val clientField = helper.javaClass.declaredFields.firstOrNull {
+                okhttp3.OkHttpClient::class.java.isAssignableFrom(it.type)
+            } ?: error("CloudStream NetworkHelper client field was not found")
+            clientField.isAccessible = true
+            val current = clientField.get(helper) as? okhttp3.OkHttpClient
+                ?: error("CloudStream NetworkHelper client is unavailable")
+            val updated = if (enabled) {
+                val bootstrap = okhttp3.OkHttpClient.Builder().build()
+                val doh = okhttp3.dnsoverhttps.DnsOverHttps.Builder()
+                    .client(bootstrap)
+                    .url(URL("https://cloudflare-dns.com/dns-query"))
+                    .bootstrapDnsHosts(InetAddress.getByName("1.1.1.1"), InetAddress.getByName("1.0.0.1"))
+                    .build()
+                current.newBuilder().dns(doh).build()
+            } else {
+                current.newBuilder().dns(okhttp3.Dns.SYSTEM).build()
+            }
+            clientField.set(helper, updated)
+            networkHelper = helper
+            dnsEnabled = enabled
+            mapOf("ok" to true, "enabled" to dnsEnabled, "provider" to "Cloudflare")
+        } catch (error: Throwable) {
+            mapOf("ok" to false, "enabled" to dnsEnabled, "error" to (error.message ?: error.javaClass.simpleName))
+        }
+    }
 
     fun getCineStreamDiagnostic(): Map<String, Any?> = mapOf(
         "summary" to cineStreamDiagnostic,
@@ -56,7 +92,8 @@ object CloudStreamExtensionLoader {
 
         Injekt.addSingletonFactory<Application> { context }
         Injekt.addSingletonFactory<Context> { context }
-        Injekt.addSingletonFactory { NetworkHelper(context) }
+        networkHelper = NetworkHelper(context)
+        Injekt.addSingletonFactory { networkHelper ?: NetworkHelper(context).also { networkHelper = it } }
         Injekt.addSingletonFactory<okhttp3.OkHttpClient> { Injekt.get<NetworkHelper>().client }
         Injekt.addSingletonFactory<Json> {
             Json {
