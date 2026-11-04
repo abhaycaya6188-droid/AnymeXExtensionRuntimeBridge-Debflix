@@ -113,7 +113,17 @@ object CloudStreamExtensionLoader {
 
         val jsonArray = com.google.gson.JsonArray()
 
-        folder.listFiles { file -> file.extension == "jar" }?.forEach { jar ->
+        folder.listFiles { file -> file.extension == "jar" || file.extension == "cs3" }?.forEach { sourceFile ->
+            val jar = if (sourceFile.extension.equals("cs3", ignoreCase = true)) {
+                val converted = File.createTempFile("cs_ext_converted_", ".jar").apply { deleteOnExit() }
+                try {
+                    com.anymex.desktop.ApkConverter.convertApkToJar(sourceFile.absolutePath, converted.absolutePath)
+                    converted
+                } catch (error: Throwable) {
+                    System.err.println("  [CS] Failed converting ${sourceFile.name}: ${error.message}")
+                    return@forEach
+                }
+            } else sourceFile
             System.err.println("[CS] Scanning: ${jar.name}")
             
             val jarProcessThread = Thread {
