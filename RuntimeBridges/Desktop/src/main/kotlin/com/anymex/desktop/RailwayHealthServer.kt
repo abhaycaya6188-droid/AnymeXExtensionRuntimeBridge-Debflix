@@ -16,7 +16,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
     private val allowedSources = System.getenv("CS_ALLOWED_SOURCE_IDS")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
-    private val effectiveAllowedSources = allowedSources + setOf("debflix-skymovies", "debflix-fibwatch")
+    private val effectiveAllowedSources = allowedSources + setOf("debflix-skymovies", "debflix-fibwatch", "debflix-cinestream")
     private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList", "csGetVideoListStream", "csCineStreamProviderLinks")
     private data class RpcJob(
         @Volatile var status: String = "pending",
@@ -49,7 +49,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
         }
         if (method == "csCineStreamProviderLinks") {
             val providerKey = args?.get("providerKey")?.asString.orEmpty()
-            require((sourceId == "debflix-skymovies" && providerKey == "p_skymovies") || (sourceId == "debflix-fibwatch" && providerKey == "p_fibwatch")) {
+            require((sourceId == "debflix-skymovies" && providerKey == "p_skymovies") || ((sourceId == "debflix-fibwatch" || sourceId == "debflix-cinestream") && providerKey == "p_fibwatch")) {
                 "Invalid CineStream provider sourceId/key pair"
             }
             val title = args?.get("title")?.asString.orEmpty()
@@ -100,6 +100,12 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "loadedCount" to loadedKeys.size,
                 "loadedProviders" to loadedKeys
             ))
+        }
+        if (session.uri == "/providers" && session.method == Method.GET) {
+            val providers = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.entries
+                .map { (id, api) -> mapOf("id" to id, "name" to api.name, "mainUrl" to api.mainUrl) }
+                .sortedBy { (it["name"] as? String).orEmpty() }
+            return json(Response.Status.OK, mapOf("ok" to true, "providers" to providers))
         }
         if (session.uri == "/settings/dns" && session.method == Method.GET) {
             return json(Response.Status.OK, com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.dnsStatus())
@@ -169,7 +175,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 val url = argsObj?.get("url")?.asString
                     ?: (if (argsArr != null && argsArr.size() > 1) argsArr.get(1).asString else "")
                 if (method !in allowedMethods) return json(Response.Status.FORBIDDEN, mapOf("error" to "method_not_allowed"))
-                if (sourceId !in effectiveAllowedSources) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
+                if (sourceId !in effectiveAllowedSources && sourceId !in com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.keys) return json(Response.Status.FORBIDDEN, mapOf("error" to "source_not_allowed"))
                 cleanupJobs()
                 val id = UUID.randomUUID().toString()
                 val job = RpcJob()
