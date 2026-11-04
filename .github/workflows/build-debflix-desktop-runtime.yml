@@ -27,8 +27,8 @@ jobs:
         working-directory: RuntimeBridges/Desktop
         run: |
           gradle shadowJar --no-daemon > /tmp/gradle.log 2>&1 || {
-            PASTE=$(curl -s -X POST https://dpaste.com/api/v2/ --data-urlencode "content@/tmp/gradle.log")
-            echo "::notice title=LogUrl::$PASTE"
+            echo "Gradle build failed. Last 180 log lines:"
+            tail -n 180 /tmp/gradle.log
             exit 1
           }
       - uses: actions/upload-artifact@v4
