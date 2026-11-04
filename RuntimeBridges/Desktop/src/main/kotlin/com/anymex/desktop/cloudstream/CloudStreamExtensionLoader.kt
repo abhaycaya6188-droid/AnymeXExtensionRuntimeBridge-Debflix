@@ -39,13 +39,41 @@ object CloudStreamExtensionLoader {
     @Volatile private var fibwatchAvailable = false
     @Volatile private var skymoviesAvailable = false
     @Volatile private var dnsEnabled = false
+    @Volatile private var dnsProvider = "Cloudflare"
     @Volatile private var networkHelper: NetworkHelper? = null
 
-    fun dnsStatus(): Map<String, Any?> = mapOf("ok" to true, "enabled" to dnsEnabled, "provider" to "Cloudflare", "scope" to "CloudStream NetworkHelper")
+    private data class DnsResolver(val endpoint: String, val bootstrap: List<String>)
+    private fun dnsResolver(provider: String): DnsResolver = when (provider.lowercase()) {
+        "google" -> DnsResolver("https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4"))
+        "cloudflare" -> DnsResolver("https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1"))
+        "adguard" -> DnsResolver("https://dns.adguard.com/dns-query", listOf("94.140.14.140", "94.140.14.141"))
+        "dns.watch", "dns.watch" -> DnsResolver("https://resolver2.dns.watch/dns-query", listOf("84.200.69.80", "84.200.70.40"))
+        "quad9" -> DnsResolver("https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112"))
+        "dns.sb" -> DnsResolver("https://doh.dns.sb/dns-query", listOf("185.222.222.222", "45.11.45.11"))
+        "canadian shield" -> DnsResolver("https://private.canadianshield.cira.ca/dns-query", listOf("149.112.121.10", "149.112.122.10"))
+        else -> error("Unsupported CloudStream DNS provider: $provider")
+    }
+
+    fun dnsStatus(): Map<String, Any?> = mapOf(
+        "ok" to true, "enabled" to dnsEnabled, "provider" to dnsProvider,
+        "scope" to "CloudStream Requests + NetworkHelper"
+    )
 
     @Synchronized
-    fun setDnsEnabled(enabled: Boolean): Map<String, Any?> {
+    fun setDnsEnabled(enabled: Boolean, provider: String = dnsProvider): Map<String, Any?> {
         return try {
+            val resolverName = provider.trim().ifBlank { "Cloudflare" }
+            val resolver = if (enabled) dnsResolver(resolverName) else null
+            val selectedDns: okhttp3.Dns = if (resolver != null) {
+                val bootstrap = okhttp3.OkHttpClient.Builder().dns(okhttp3.Dns.SYSTEM).build()
+                okhttp3.dnsoverhttps.DnsOverHttps.Builder()
+                    .client(bootstrap)
+                    .url(resolver.endpoint.toHttpUrl())
+                    .bootstrapDnsHosts(resolver.bootstrap.map { InetAddress.getByName(it) })
+                    .build()
+            } else okhttp3.Dns.SYSTEM
+
+            var updatedClients = 0
             val helper = networkHelper ?: NetworkHelper(Injekt.get<Application>()).also { networkHelper = it }
             val clientField = helper.javaClass.declaredFields.firstOrNull {
                 okhttp3.OkHttpClient::class.java.isAssignableFrom(it.type)
@@ -53,23 +81,37 @@ object CloudStreamExtensionLoader {
             clientField.isAccessible = true
             val current = clientField.get(helper) as? okhttp3.OkHttpClient
                 ?: error("CloudStream NetworkHelper client is unavailable")
-            val updated = if (enabled) {
-                val bootstrap = okhttp3.OkHttpClient.Builder().build()
-                val doh = okhttp3.dnsoverhttps.DnsOverHttps.Builder()
-                    .client(bootstrap)
-                    .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-                    .bootstrapDnsHosts(InetAddress.getByName("1.1.1.1"), InetAddress.getByName("1.0.0.1"))
-                    .build()
-                current.newBuilder().dns(doh).build()
-            } else {
-                current.newBuilder().dns(okhttp3.Dns.SYSTEM).build()
-            }
+            val updated = current.newBuilder().dns(selectedDns).build()
             clientField.set(helper, updated)
+            current.connectionPool.evictAll()
             networkHelper = helper
+            updatedClients++
+
+            // CloudStream providers may use the shared Requests client rather than
+            // Aniyomi NetworkHelper. Apply the same resolver to both clients.
+            runCatching {
+                val holder = CloudStreamExtensionLoader::class.java.classLoader
+                    .loadClass("com.lagradost.cloudstream3.MainActivityKt")
+                val requests = holder.getMethod("getApp").invoke(null)
+                    ?: error("CloudStream Requests instance is unavailable")
+                val baseClient = requests.javaClass.getMethod("getBaseClient").invoke(requests) as? okhttp3.OkHttpClient
+                    ?: error("CloudStream Requests base client is unavailable")
+                val replacement = baseClient.newBuilder().dns(selectedDns).build()
+                requests.javaClass.getMethod("setBaseClient", okhttp3.OkHttpClient::class.java)
+                    .invoke(requests, replacement)
+                baseClient.connectionPool.evictAll()
+                updatedClients++
+            }.onFailure { error ->
+                System.err.println("[CS-DNS] Requests client update failed: ${error.message}")
+            }
+
             dnsEnabled = enabled
-            mapOf("ok" to true, "enabled" to dnsEnabled, "provider" to "Cloudflare")
+            dnsProvider = resolverName
+            mapOf("ok" to true, "enabled" to dnsEnabled, "provider" to dnsProvider,
+                "scope" to "CloudStream Requests + NetworkHelper", "updatedClients" to updatedClients)
         } catch (error: Throwable) {
-            mapOf("ok" to false, "enabled" to dnsEnabled, "error" to (error.message ?: error.javaClass.simpleName))
+            mapOf("ok" to false, "enabled" to dnsEnabled, "provider" to dnsProvider,
+                "error" to (error.message ?: error.javaClass.simpleName))
         }
     }
 
