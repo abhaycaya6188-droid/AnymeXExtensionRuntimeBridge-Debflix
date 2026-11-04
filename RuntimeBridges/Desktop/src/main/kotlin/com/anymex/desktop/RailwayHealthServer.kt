@@ -16,7 +16,7 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
     private val gson = Gson()
     private val token = System.getenv("CS_BRIDGE_TOKEN")?.trim().orEmpty()
     private val allowedSources = System.getenv("CS_ALLOWED_SOURCE_IDS")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
-    private val effectiveAllowedSources = allowedSources + "debflix-skymovies"
+    private val effectiveAllowedSources = allowedSources + setOf("debflix-skymovies", "debflix-fibwatch")
     private val allowedMethods = setOf("csSearch", "csGetDetail", "csGetVideoList", "csGetVideoListStream", "csCineStreamProviderLinks")
     private data class RpcJob(
         @Volatile var status: String = "pending",
@@ -49,8 +49,8 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
         }
         if (method == "csCineStreamProviderLinks") {
             val providerKey = args?.get("providerKey")?.asString.orEmpty()
-            require(sourceId == "debflix-skymovies" && providerKey == "p_skymovies") {
-                "Only the SkyMovies provider is exposed by this RPC"
+            require((sourceId == "debflix-skymovies" && providerKey == "p_skymovies") || (sourceId == "debflix-fibwatch" && providerKey == "p_fibwatch")) {
+                "Invalid CineStream provider sourceId/key pair"
             }
             val title = args?.get("title")?.asString.orEmpty()
             val year = args?.get("year")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
@@ -100,6 +100,22 @@ class RailwayHealthServer(port: Int) : NanoHTTPD(port) {
                 "loadedCount" to loadedKeys.size,
                 "loadedProviders" to loadedKeys
             ))
+        }
+        if (session.uri == "/settings/dns" && session.method == Method.GET) {
+            return json(Response.Status.OK, com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.dnsStatus())
+        }
+        if (session.uri == "/settings/dns" && session.method == Method.POST) {
+            if (!authorized(session)) return json(Response.Status.UNAUTHORIZED, mapOf("error" to "unauthorized"))
+            return try {
+                val files = HashMap<String, String>()
+                session.parseBody(files)
+                val body = gson.fromJson(files["postData"].orEmpty(), JsonObject::class.java)
+                val enabled = body?.get("enabled")?.asBoolean ?: false
+                val result = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.setDnsEnabled(enabled)
+                json(if (result["ok"] == true) Response.Status.OK else Response.Status.INTERNAL_ERROR, result)
+            } catch (ex: Exception) {
+                json(Response.Status.BAD_REQUEST, mapOf("ok" to false, "error" to "invalid_dns_settings"))
+            }
         }
         if (session.uri == "/diagnostics") {
             val loaded = com.anymex.desktop.cloudstream.CloudStreamExtensionLoader.loadedMap.entries.map { (k, v) ->
