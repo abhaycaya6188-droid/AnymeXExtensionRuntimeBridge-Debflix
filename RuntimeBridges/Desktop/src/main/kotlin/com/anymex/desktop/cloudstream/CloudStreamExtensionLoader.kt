@@ -47,7 +47,7 @@ object CloudStreamExtensionLoader {
         "google" -> DnsResolver("https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4"))
         "cloudflare" -> DnsResolver("https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1"))
         "adguard" -> DnsResolver("https://dns.adguard.com/dns-query", listOf("94.140.14.140", "94.140.14.141"))
-        "dns.watch", "dns.watch" -> DnsResolver("https://resolver2.dns.watch/dns-query", listOf("84.200.69.80", "84.200.70.40"))
+        "dns.watch" -> DnsResolver("https://resolver2.dns.watch/dns-query", listOf("84.200.69.80", "84.200.70.40"))
         "quad9" -> DnsResolver("https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112"))
         "dns.sb" -> DnsResolver("https://doh.dns.sb/dns-query", listOf("185.222.222.222", "45.11.45.11"))
         "canadian shield" -> DnsResolver("https://private.canadianshield.cira.ca/dns-query", listOf("149.112.121.10", "149.112.122.10"))
